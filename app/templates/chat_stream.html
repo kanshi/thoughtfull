@@ -1,0 +1,50 @@
+<div class="chat-message chat-user">
+    <p>{{ message }}</p>
+</div>
+<div class="chat-message chat-assistant">
+    <p id="stream-content"></p>
+</div>
+
+<script>
+    // Create a unique event source URL with a timestamp to prevent caching
+const timestamp = new Date().getTime();
+const eventSource = new EventSource(`/chat/stream?session_id={{ session_id }}&_=${timestamp}`);
+    const streamContent = document.getElementById('stream-content');
+    let fullContent = '';
+    
+    eventSource.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            
+            if (data.done) {
+                // Stream complete, close connection
+                eventSource.close();
+                
+                // Trigger a refresh of the chat messages to show the final formatted version
+                // with any document context that might be relevant
+                htmx.trigger(document.body, 'refreshMessages');
+            } else if (data.content) {
+                // Append the new content
+                fullContent += data.content;
+                streamContent.innerHTML = fullContent;
+                
+                // Scroll to bottom
+                const chatContainer = document.getElementById('chat-container');
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+        } catch (e) {
+            console.error("Error parsing stream data:", e);
+        }
+    };
+    
+    eventSource.onerror = function(event) {
+        console.error("EventSource error:", event);
+        eventSource.close();
+        
+        // Show error message
+        streamContent.innerHTML = "Error: Connection to server lost. Please try again.";
+        
+        // Trigger a refresh to get the complete message if possible
+        htmx.trigger(document.body, 'refreshMessages');
+    };
+</script>

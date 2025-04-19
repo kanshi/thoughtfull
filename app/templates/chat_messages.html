@@ -1,0 +1,25 @@
+{% if messages %}
+    {% for message in messages %}
+        <div class="chat-message {% if message.role == 'user' %}chat-user{% else %}chat-assistant{% endif %}">
+            <p>{{ message.content }}</p>
+        </div>
+    {% endfor %}
+{% else %}
+    <div class="flex items-center justify-center h-full">
+        <p class="text-gray-500 italic">Start a conversation by sending a message below.</p>
+    </div>
+{% endif %}
+
+{% if search_results and message_with_context %}
+    <div class="bg-gray-100 p-3 rounded-lg mb-4 mt-2">
+        <p class="text-sm text-gray-600 mb-2">Related document snippets:</p>
+        <div class="space-y-2 max-h-48 overflow-y-auto">
+            {% for result in search_results %}
+                <div class="p-2 bg-white rounded border border-gray-200">
+                    <p class="text-sm">{{ result.content }}</p>
+                    <p class="citation">From: {{ result.file_name }} (Relevance: {{ "%.2f"|format(result.score) }})</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+{% endif %}

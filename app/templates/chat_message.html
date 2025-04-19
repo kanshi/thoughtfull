@@ -1,0 +1,17 @@
+<div class="chat-message {% if is_assistant %}chat-assistant{% else %}chat-user{% endif %}">
+    <p>{{ message }}</p>
+</div>
+
+{% if search_results and message_with_context %}
+    <div class="bg-hacker-terminal border border-neon-cyan border-opacity-30 p-3 rounded-lg mb-4 mt-2">
+        <p class="text-sm text-neon-cyan mb-2 font-mono"><i class="fas fa-database mr-1"></i> Knowledge Base Context:</p>
+        <div class="space-y-2 max-h-48 overflow-y-auto">
+            {% for result in search_results %}
+                <div class="p-2 bg-hacker-medium rounded border border-gray-700">
+                    <p class="text-sm text-gray-300">{{ result.content }}</p>
+                    <p class="citation">Source: <span class="text-neon-cyan">{{ result.file_name }}</span> (Relevance: <span class="text-neon-green">{{ "%.2f"|format(result.score) }}</span>)</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+{% endif %}

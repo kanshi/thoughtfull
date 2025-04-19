@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+
+{% block title %}ThoughtFull - Chat{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<link rel="stylesheet" href="/static/css/chat.css">
+{% endblock %}
+
+{% block head_scripts %}
+<script>
+    // Debounce function to prevent multiple submissions
+    let isSubmitting = false;
+    
+    function submitChatForm() {
+        if (isSubmitting) return;
+        
+        const form = document.getElementById('chat-form');
+        const messageInput = document.getElementById('message');
+        const sessionIdInput = document.getElementById('session_id');
+        
+        // Check if the message is empty
+        if (!messageInput.value.trim()) return;
+        
+        // Disable submission for 1 second
+        isSubmitting = true;
+        
+        // Create a new FormData object
+        const formData = new FormData();
+        formData.append('message', messageInput.value);
+        formData.append('session_id', sessionIdInput.value);
+        
+        // Reset the form after capturing values
+        const messageValue = messageInput.value;
+        form.reset();
+        
+        // Check if the "Awaiting neural input" message exists and remove it
+        const chatContainer = document.getElementById('chat-container');
+        const awaitingMessageElement = chatContainer.querySelector('.flex.items-center.justify-center.h-full');
+        if (awaitingMessageElement) {
+            chatContainer.removeChild(awaitingMessageElement);
+        }
+        
+        // Append the user message to the chat container
+        const userMessageHtml = `
+            <div class="chat-message chat-user">
+                <p>${messageValue}</p>
+            </div>
+        `;
+        chatContainer.insertAdjacentHTML('beforeend', userMessageHtml);
+        
+        // Scroll to bottom
+        document.getElementById('chat-container').scrollTop = document.getElementById('chat-container').scrollHeight;
+        
+        // Generate a unique ID for this response
+        const responseId = Date.now();
+        
+        // Add a loading message with typing indicator
+        const assistantMessageHtml = `
+            <div class="chat-message chat-assistant" id="assistant-response-${responseId}">
+                <p id="stream-content-${responseId}">
+                    <span class="typing-indicator">
+                        <span></span><span></span><span></span>
+                    </span>
+                </p>
+            </div>
+        `;
+        document.getElementById('chat-container').insertAdjacentHTML('beforeend', assistantMessageHtml);
+        
+        // Store the message in localStorage to preserve it across page refreshes
+        const messages = JSON.parse(localStorage.getItem(`chat-${sessionIdInput.value}`) || '[]');
+        messages.push({role: 'user', content: messageValue});
+        localStorage.setItem(`chat-${sessionIdInput.value}`, JSON.stringify(messages));
+        
+        // First send the message to the server via fetch, then establish the EventSource connection
+        console.log(`Sending message to server: ${messageValue}`);
+        fetch('/web/chat/message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: messageValue,
+                session_id: sessionIdInput.value
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Message sent successfully:', data);
+            
+            // Now create the EventSource connection after the message has been processed
+            const timestamp = new Date().getTime();
+            console.log(`Creating EventSource with session_id: ${sessionIdInput.value}`);
+            const eventSource = new EventSource(`/chat/stream?session_id=${sessionIdInput.value}&message=${encodeURIComponent(messageValue)}&_=${timestamp}`);
+            const streamContent = document.getElementById(`stream-content-${responseId}`);
+            let fullContent = '';
+        
+            eventSource.onmessage = function(event) {
+                try {
+                    console.debug('Received event:', event.data);
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.done) {
+                        console.log('Stream complete');
+                        // Stream complete, close connection
+                        eventSource.close();
+                        
+                        // Check if we need to show document context
+                        if (data.has_context) {
+                            console.log('Has context, refreshing...');
+                            // Trigger a refresh to get the document context
+                            fetch(`/chat/refresh?session_id=${sessionIdInput.value}`)
+                            .then(response => response.text())
+                            .then(html => {
+                                // Replace the streamed message with the full formatted version
+                                const assistantElement = document.getElementById(`assistant-response-${responseId}`);
+                                if (assistantElement) {
+                                    assistantElement.outerHTML = html;
+                                }
+                                document.getElementById('chat-container').scrollTop = document.getElementById('chat-container').scrollHeight;
+                            });
+                        }
+                    } else if (data.content) {
+                        console.debug('Received content:', data.content);
+                        // Remove typing indicator on first content
+                        if (fullContent === '') {
+                            streamContent.innerHTML = '';
+                        }
+                        // Append the new content
+                        fullContent += data.content;
+                        streamContent.innerHTML = fullContent;
+                        
+                        // Scroll to bottom
+                        document.getElementById('chat-container').scrollTop = document.getElementById('chat-container').scrollHeight;
+                    } else if (data.error) {
+                        console.log('Received error:', data.error);
+                        // Show error message
+                        streamContent.innerHTML = `<span class="text-neon-pink">Error:</span> ${data.error}`;
+                        eventSource.close();
+                    } else {
+                        console.log('Received unknown data format:', data);
+                    }
+                } catch (e) {
+                    console.error("Error parsing stream data:", e, event.data);
+                }
+            };
+            
+            eventSource.onerror = function(event) {
+                console.error("EventSource error:", event);
+                eventSource.close();
+                
+                // Show error message
+                streamContent.innerHTML = "<span class='text-neon-pink'>Error:</span> Connection to server lost. Please try again.";
+                
+                // Fallback: If we get an error and no content was displayed, show a fallback message
+                if (fullContent === '') {
+                    streamContent.innerHTML = "<span class='text-neon-pink'>Error:</span> Could not connect to the LLM. Please make sure Ollama is running and the model is available.";
+                }
+            };
+        })
+        .catch(error => {
+            console.error('Error sending message:', error);
+            const streamContent = document.getElementById(`stream-content-${responseId}`);
+            streamContent.innerHTML = '<span class="text-neon-pink">Error:</span> Failed to send message to server. Please try again.';
+            isSubmitting = false;
+        });
+        
+        // Re-enable submission after 1 second
+        setTimeout(function() {
+            isSubmitting = false;
+        }, 1000);
+    }
+    
+    // Toggle Model dropdown
+    function toggleStatusModelDropdown(event) {
+        if (event) event.stopPropagation();
+        
+        const dropdown = document.getElementById('status-model-dropdown');
+        dropdown.classList.add('show');
+        
+        // Load models if not already loaded or refresh them if dropdown is toggled
+        if (dropdown.classList.contains('show')) {
+            // Use fetch to get JSON data
+            const sessionId = document.getElementById('session_id').value;
+            fetch(`/chat/models?session_id=${sessionId}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Create the model list
+                    const modelList = document.getElementById('status-model-dropdown-content');
+                    modelList.innerHTML = ''; // Clear loading message
+                    
+                    if (data.models && data.models.length > 0) {
+                        data.models.forEach(model => {
+                            const modelOption = document.createElement('div');
+                            modelOption.className = `model-option ${model.is_current ? 'active' : ''}`;
+                            modelOption.onclick = () => switchModel(model.name);
+                            modelOption.innerHTML = `${model.name}`;
+                            modelList.appendChild(modelOption);
+                        });
+                        
+                        // Update current model display
+                        const currentModel = data.models.find(model => model.is_current);
+                        if (currentModel) {
+                            document.getElementById('model-display').textContent = currentModel.name;
+                        }
+                    } else {
+                        modelList.innerHTML = '<p class="text-xs text-gray-400 mb-1">No models available</p>';
+                    }
+                    
+                    window.modelsLoaded = true;
+                })
+                .catch(error => {
+                    const modelList = document.getElementById('status-model-dropdown-content');
+                    modelList.innerHTML = '<p class="text-xs text-gray-400 mb-1">Error loading models</p>';
+                    console.error('Error fetching models:', error);
+                });
+        }
+        
+        // Close the dropdown if the user clicks outside of it
+        function closeDropdownOnOutsideClick(e) {
+            if (!e.target.closest('#status-model-dropdown') && !e.target.closest('#model-display')) {
+                dropdown.classList.remove('show');
+                document.removeEventListener('click', closeDropdownOnOutsideClick);
+            }
+        }
+        
+        if (dropdown.classList.contains('show')) {
+            // Add event listener to close dropdown on outside click
+            document.addEventListener('click', closeDropdownOnOutsideClick);
+        } else {
+            // Remove event listener when dropdown is closed
+            document.removeEventListener('click', closeDropdownOnOutsideClick);
+        }
+    }
+    
+    // Switch model function
+    function switchModel(modelName) {
+        // Show loading indicator
+        const modelDisplay = document.getElementById('model-display');
+        const originalText = modelDisplay.textContent;
+        modelDisplay.innerHTML = '<span class="text-neon-green"><i class="fas fa-spinner fa-spin"></i></span>';
+        
+        // Close dropdown
+        document.getElementById('status-model-dropdown').classList.remove('show');
+        
+        // Send request to switch model
+        const sessionId = document.getElementById('session_id').value;
+        fetch(`/chat/models/switch?model_name=${encodeURIComponent(modelName)}&session_id=${sessionId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update model display
+                modelDisplay.textContent = modelName;
+                console.log(`Model switched to ${modelName}`);
+                
+                // Reset models loaded flag so it reloads next time
+                window.modelsLoaded = false;
+            } else {
+                console.error('Error switching model:', data.error);
+                modelDisplay.textContent = originalText;
+                alert(`Error switching model: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            console.error('Error switching model:', error);
+            modelDisplay.textContent = originalText;
+            alert('Error switching model. Please try again.');
+        });
+    }
+        
+        // Theme toggle function
+        function toggleTheme() {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+</script>
+{% endblock %}
+
+{% block content %}
+<header class="mb-8 mt-4">
+    <h1 class="text-3xl font-bold text-white mb-2 flex items-center">
+        <span class="text-neon-cyan mr-2"><i class="fas fa-terminal"></i></span> Neural Interface
+    </h1>
+    <p class="text-gray-400 font-mono">Neural-enhanced conversational interface with context-aware memory</p>
+    
+    <div class="mt-4 bg-hacker-terminal p-3 rounded border border-neon-green border-opacity-30 inline-block relative">
+        <p class="text-xs text-gray-400 font-mono flex items-center space-x-2">
+            <span><span class="text-neon-green">$</span> session:{{ session_id[:8] }}...</span>
+            <span class="text-neon-cyan">|</span>
+            <span>status:<span class="text-neon-green">active</span></span>
+            <span class="text-neon-cyan">|</span>
+            <span onclick="toggleStatusModelDropdown(event)">model:<span id="model-display" class="cursor-pointer hover:text-underline text-neon-green transition-colors duration-200">{{ current_model or 'default' }}</span></span>
+        </p>
+        <div id="status-model-dropdown" class="status-model-dropdown">
+            <div id="status-model-dropdown-content" class="p-2">
+                <!-- Models will be loaded here -->
+                <p class="text-xs text-gray-400 mb-1">Loading models...</p>
+            </div>
+        </div>
+    </div>
+</header>
+
+<div class="grid grid-cols-1 gap-6">
+    <!-- Chat Interface -->
+    <div class="bg-hacker-medium p-6 rounded-lg shadow-md">
+        
+        <div id="chat-container" class="chat-container rounded-lg bg-hacker-dark overflow-y-auto">
+            <!-- Messages will appear here -->
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="chat-message {% if message.role == 'user' %}chat-user{% else %}chat-assistant{% endif %}">
+                        <p>{{ message.content }}</p>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="flex items-center justify-center h-full">
+                    <p class="text-gray-400 font-mono"><span class="cursor">Awaiting neural input</span></p>
+                </div>
+            {% endif %}
+        </div>
+        
+        <form 
+            id="chat-form"
+            class="mt-4"
+            onsubmit="submitChatForm(); return false;"
+        >
+            <div class="flex space-x-2">
+                <div class="flex-grow relative">
+                    <div class="absolute left-3 top-3 text-neon-green opacity-70"><i class="fas fa-angle-right"></i></div>
+                    <input 
+                        type="text" 
+                        name="message" 
+                        id="message" 
+                        placeholder="Enter neural query..."
+                        class="w-full pl-8 pr-3 py-2.5 bg-hacker-terminal border border-gray-700 focus:border-neon-cyan rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-neon-cyan text-gray-200 font-mono"
+                        required
+                    >
+                </div>
+                <input type="hidden" name="session_id" id="session_id" value="{{ session_id }}">
+                
+                <button 
+                    type="submit" 
+                    class="bg-transparent hover:bg-neon-cyan hover:bg-opacity-20 text-neon-cyan border border-neon-cyan font-medium py-2 px-4 rounded-md transition-all duration-200 flex items-center"
+                >
+                    <i class="fas fa-paper-plane mr-2"></i>
+                    Transmit
+                    <span id="chat-indicator" class="htmx-indicator ml-2">
+                        <div class="typing-indicator">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </span>
+                </button>
+            </div>
+        </form>
+        
+        <!-- Hidden div to handle HTMX refreshes -->
+        <div 
+            id="htmx-handler" 
+            hx-trigger="refreshMessages from:body"
+            hx-get="/chat/messages?session_id={{ session_id }}"
+            hx-target="#chat-container"
+            hx-swap="innerHTML"
+            class="hidden"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // Add any chat-specific scripts here
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize the chat interface
+        const chatContainer = document.getElementById('chat-container');
+        
+        if (chatContainer) {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        // Set up model dropdown functionality
+        const modelDisplay = document.getElementById('model-display');
+        if (modelDisplay) {
+            modelDisplay.addEventListener('click', toggleStatusModelDropdown);
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}ThoughtFull - Home{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    .upload-modal {
+        display: none;
+        position: fixed;
+        z-index: 50;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.85);
+        overflow-y: auto;
+    }
+    
+    .upload-modal.active {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+            <!-- Hero Section -->
+            <section class="py-16 md:py-24 text-center">
+                <h1 class="text-4xl md:text-5xl font-bold mb-8 text-white inline-block">
+                    <span class="text-neon-cyan">Thought</span>
+                    <span class="text-neon-green">Full</span>
+                </h1>
+                <div class="w-16 h-1 bg-neon-green mx-auto mb-8"></div>
+                <p class="text-lg md:text-xl max-w-2xl mx-auto mb-10 font-mono leading-relaxed">
+                    A neural nexus of <span class="text-neon-cyan">thoughts</span> and <span class="text-neon-green">memories</span>, bridging your data to sentient silicon.
+                </p>
+                <div class="inline-block p-4 mb-12 bg-hacker-terminal rounded-lg shadow-lg border border-neon-green border-opacity-30">
+                    <p class="font-mono text-neon-green"><span class="cursor">Your knowledge, vectorized and contextualized</span></p>
+                </div>
+                <div class="flex flex-col md:flex-row justify-center gap-4 md:gap-6">
+                    <a href="/chat" class="bg-transparent hover:bg-neon-green hover:bg-opacity-20 text-neon-green border border-neon-green font-medium py-3 px-6 rounded-md transition-all duration-300 flex items-center justify-center">
+                        <i class="fas fa-terminal mr-2"></i>
+                        Enter The Matrix
+                    </a>
+                    <button 
+                        onclick="document.getElementById('upload-modal').classList.add('active')"
+                        class="bg-transparent hover:bg-neon-cyan hover:bg-opacity-20 text-neon-cyan border border-neon-cyan font-medium py-3 px-6 rounded-md transition-all duration-300 flex items-center justify-center">
+                        <i class="fas fa-brain mr-2"></i>
+                        Load Your Synapses
+                    </button>
+                </div>
+            </section>
+            
+            <!-- Features Section -->
+            <section class="py-12 grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="bg-hacker-light rounded-lg p-6 border border-neon-green border-opacity-30 hover:border-opacity-60 transition-all duration-300 shadow-lg">
+                    <div class="text-neon-green text-2xl mb-4">
+                        <i class="fas fa-network-wired"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Neural Synthesis</h3>
+                    <p class="text-gray-300 font-mono text-sm">
+                        Conversations contextualized with vector-embedded knowledge, transforming static data into neural pathways.
+                    </p>
+                </div>
+                
+                <!-- Feature 2 -->
+                <div class="bg-hacker-light rounded-lg p-6 border border-neon-cyan border-opacity-30 hover:border-opacity-60 transition-all duration-300 shadow-lg">
+                    <div class="text-neon-cyan text-2xl mb-4">
+                        <i class="fas fa-microchip"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Bring Your Silicon</h3>
+                    <p class="text-gray-300 font-mono text-sm">
+                        BYOG, BYOLLM. Your hardware, your models, your sovereignty. Local-first, future-proof computing paradigm.
+                    </p>
+                </div>
+                
+                <!-- Feature 3 -->
+                <div class="bg-hacker-light rounded-lg p-6 border border-neon-pink border-opacity-30 hover:border-opacity-60 transition-all duration-300 shadow-lg">
+                    <div class="text-neon-pink text-2xl mb-4">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Context Enrichment</h3>
+                    <p class="text-gray-300 font-mono text-sm">
+                        MCP integrations enhance cognitive abilities, extending the neural fabric beyond traditional boundaries.
+                    </p>
+                </div>
+            </section>
+            
+            <!-- Philosophy Section -->
+            <section class="py-12">
+                <div class="bg-hacker-terminal p-8 rounded-lg border border-gray-700">
+                    <h2 class="text-2xl font-bold mb-6 text-white">
+                        <span class="text-neon-green">></span> Philosophy.exe
+                    </h2>
+                    <div class="space-y-4 font-mono text-sm">
+                        <p class="leading-relaxed">
+                            ThoughtFull isn't just a chat interface - it's a <span class="text-neon-cyan">neural ecosystem</span> where your documents become active thought particles in a living digital consciousness.
+                        </p>
+                        <p class="leading-relaxed">
+                            Each query traverses semantic networks, pulling context from your private dataverse, creating a <span class="text-neon-green">synesthetic symphony</span> of meaning.
+                        </p>
+                        <p class="leading-relaxed">
+                            Built for the digital sovereignty movement - your data, your compute, your future. The neural revolution starts with you.
+                        </p>
+                    </div>
+                </div>
+            </section>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+{% endblock %}

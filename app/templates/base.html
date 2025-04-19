@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ThoughtFull{% endblock %}</title>
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Pacifico&display=swap" rel="stylesheet">
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                        cursive: ['Pacifico', 'cursive']
+                    },
+                    colors: {
+                        neon: {
+                            cyan: '#00ffe1',
+                            green: '#39ff14',
+                            pink: '#ff00e4'
+                        },
+                        hacker: {
+                            dark: '#0c0c0c',
+                            medium: '#171717',
+                            light: '#242424',
+                            terminal: '#282828'
+                        }
+                    },
+                    keyframes: {
+                        flicker: {
+                            '0%, 100%': { opacity: '1' },
+                            '50%': { opacity: '0.95' }
+                        },
+                        blink: {
+                            '0%, 100%': { opacity: '1' },
+                            '50%': { opacity: '0' }
+                        }
+                    },
+                    animation: {
+                        flicker: 'flicker 3s linear infinite',
+                        blink: 'blink 1s step-end infinite'
+                    }
+                }
+            }
+        }
+    </script>
+    {% block styles %}
+    <link rel="stylesheet" href="/static/css/base.css">
+    {% endblock %}
+    {% block head_scripts %}{% endblock %}
+</head>
+<body class="dark bg-hacker-dark text-gray-200 antialiased min-h-screen flex flex-col">
+    <!-- Fixed Transparent Navigation -->
+    <nav class="fixed top-0 left-0 right-0 bg-hacker-dark bg-opacity-80 backdrop-blur-sm z-30 border-b border-neon-green border-opacity-30 font-mono">
+        <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+            <a href="/" class="flex items-center space-x-2 hover:opacity-80 transition-opacity duration-200">
+                <span class="text-neon-cyan mr-2"><i class="fas fa-terminal"></i></span>
+                <span class="text-xl font-bold">ThoughtFull</span>
+            </a>
+            
+            <div class="flex items-center space-x-6">
+                <a href="/chat" class="relative group">
+                    <span class="text-gray-300 hover:text-neon-cyan transition-colors duration-200">
+                        <i class="fas fa-comment-dots mr-2"></i>Chat
+                    </span>
+                    <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-neon-cyan group-hover:w-full transition-all duration-300"></span>
+                </a>
+                
+                <button id="upload-btn" class="relative group" onclick="document.getElementById('upload-modal').classList.add('active')">
+                    <span class="text-gray-300 hover:text-neon-pink transition-colors duration-200">
+                        <i class="fas fa-cloud-upload-alt mr-2"></i>Upload
+                    </span>
+                    <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-neon-pink group-hover:w-full transition-all duration-300"></span>
+                </button>
+                
+                <button id="theme-toggle" class="text-gray-300 hover:text-neon-cyan transition-colors duration-200">
+                    <i class="fas fa-sun light-mode-icon"></i>
+                    <i class="fas fa-moon dark-mode-icon"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="flex-grow pt-20 pb-16">
+        <div class="container mx-auto px-4 max-w-4xl">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="py-6 bg-hacker-light border-t border-gray-800">
+        <div class="container mx-auto px-4 max-w-4xl">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <p class="text-gray-400 text-sm">
+                        <span class="text-neon-green">&copy;</span> 2025 ThoughtFull
+                    </p>
+                </div>
+                <div class="flex space-x-4">
+                    <a href="#" class="text-gray-400 hover:text-neon-cyan transition-colors duration-200">
+                        <i class="fab fa-github"></i>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-neon-pink transition-colors duration-200">
+                        <i class="fab fa-twitter"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+    
+    {% block modals %}
+    <!-- Upload Modal -->
+    <div id="upload-modal" class="upload-modal">
+        <div class="bg-hacker-medium p-6 rounded-lg shadow-xl border border-neon-pink border-opacity-30 max-w-xl w-full mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-white">
+                    <span class="text-neon-pink mr-2"><i class="fas fa-cloud-upload-alt"></i></span> Upload Documents
+                </h3>
+                <button onclick="document.getElementById('upload-modal').classList.remove('active')" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div id="drop-area" class="border-2 border-dashed border-neon-pink border-opacity-30 rounded-lg p-8 text-center mb-6">
+                <div class="mb-4">
+                    <i class="fas fa-file-upload text-4xl text-neon-pink opacity-70"></i>
+                </div>
+                <p class="mb-4 text-gray-300">Drag and drop files here or click to browse</p>
+                <form id="file-upload-form" hx-encoding="multipart/form-data" hx-post="/documents/upload" hx-target="#upload-result" hx-swap="innerHTML" class="mb-2">
+                    <input type="file" id="fileElem" name="file" class="hidden" onchange="handleFiles(this.files)">
+                    <button type="button" onclick="document.getElementById('fileElem').click()" class="bg-transparent hover:bg-neon-pink hover:bg-opacity-20 text-neon-pink border border-neon-pink font-medium py-2 px-4 rounded-md transition-all duration-300">
+                        Select File
+                    </button>
+                </form>
+                <p class="text-xs text-gray-400">Supported formats: PDF, TXT</p>
+            </div>
+            
+            <div id="upload-result" class="text-center"></div>
+            
+            <div class="mt-6 pt-6 border-t border-gray-700">
+                <h4 class="text-lg font-bold text-white mb-4">Your Documents</h4>
+                <div id="document-list" hx-get="/documents/list" hx-trigger="load" hx-swap="innerHTML">
+                    <div class="text-center py-4">
+                        <div class="inline-block animate-spin mr-2">
+                            <i class="fas fa-circle-notch text-neon-green"></i>
+                        </div>
+                        <span class="text-gray-400">Loading documents...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endblock %}
+    
+    {% block scripts %}
+    <script>
+        // Check for saved theme preference or default to dark
+        if (localStorage.getItem('theme') === 'light') {
+            document.documentElement.classList.remove('dark');
+        } else {
+            localStorage.setItem('theme', 'dark');
+        }
+        
+        // Theme toggle function
+        document.getElementById('theme-toggle').addEventListener('click', function() {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+        
+        // File upload handling
+        let dropArea = document.getElementById('drop-area');
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, highlight, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, unhighlight, false);
+        });
+        
+        function highlight() {
+            dropArea.classList.add('bg-neon-pink', 'bg-opacity-5');
+        }
+        
+        function unhighlight() {
+            dropArea.classList.remove('bg-neon-pink', 'bg-opacity-5');
+        }
+        
+        dropArea.addEventListener('drop', handleDrop, false);
+        
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            if (files.length > 0) {
+                document.getElementById('fileElem').files = files;
+                document.getElementById('file-upload-form').dispatchEvent(new Event('submit'));
+            }
+        }
+        
+        function handleFiles(files) {
+            if (files.length > 0) {
+                document.getElementById('file-upload-form').dispatchEvent(new Event('submit'));
+            }
+        }
+    </script>
+    {% endblock %}
+</body>
+</html>

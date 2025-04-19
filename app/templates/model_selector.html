@@ -1,0 +1,53 @@
+<!-- Hidden span to store current model for JS to access -->
+<span class="hidden" data-current-model="{{ current_model }}"></span>
+
+<!-- Model options with hackerish styling -->
+<div class="py-2 max-h-60 overflow-y-auto">
+    <p class="text-xs text-gray-400 font-mono mb-2 px-3">Select Neural Engine:</p>
+    
+    {% if models %}
+        <div class="space-y-1">
+            {% for model in models %}
+            <button 
+                hx-post="/chat/models/switch?model_name={{ model.name }}&session_id={{ session_id }}"
+                hx-trigger="click"
+                hx-swap="none"
+                hx-on::after-request="
+                    // Update both dropdown and session info displays
+                    document.getElementById('current-model-display').textContent='{{ model.name }}'; 
+                    if (document.getElementById('model-display')) {
+                        document.getElementById('model-display').textContent='{{ model.name }}';
+                    }
+                    document.getElementById('model-dropdown').classList.toggle('show');
+                    
+                    // Log model change for debugging
+                    console.log('Model changed to: {{ model.name }}');
+                    
+                    // Update all buttons to remove active styling
+                    document.querySelectorAll('#model-dropdown-content button').forEach(btn => {
+                        btn.classList.remove('bg-neon-green', 'bg-opacity-20', 'text-neon-green');
+                        btn.classList.add('hover:bg-hacker-dark', 'text-gray-300', 'hover:text-neon-green');
+                        const checkIcon = btn.querySelector('.check-icon');
+                        if (checkIcon) checkIcon.style.display = 'none';
+                    });
+                    
+                    // Apply active styling to this button
+                    this.classList.remove('hover:bg-hacker-dark', 'text-gray-300', 'hover:text-neon-green');
+                    this.classList.add('bg-neon-green', 'bg-opacity-20', 'text-neon-green');
+                    const checkIcon = this.querySelector('.check-icon');
+                    if (checkIcon) {
+                        checkIcon.style.display = 'inline-block';
+                    }
+                "
+                class="w-full text-left px-3 py-1.5 rounded flex items-center justify-between {% if model.name == current_model %}bg-neon-green bg-opacity-20 text-neon-green{% else %}hover:bg-hacker-dark text-gray-300 hover:text-neon-green{% endif %} transition-colors duration-150 text-sm font-mono">
+                <span>{{ model.name }}</span>
+                <i class="fas fa-check text-xs check-icon" style="display: {% if model.name == current_model %}inline-block{% else %}none{% endif %}"></i>
+            </button>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="px-3 py-2 text-sm text-gray-500 font-mono">
+            <span class="text-neon-pink">Error:</span> No models detected
+        </div>
+    {% endif %}
+</div>
