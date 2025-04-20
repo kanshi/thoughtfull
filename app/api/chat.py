@@ -1,17 +1,16 @@
 import uuid
+import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional, Dict, Any
 
 from app.models.chat import ChatRequest, ChatResponse, ModelsResponse, ModelInfo
 from app.services.ollama import OllamaService
-from app.database import search_documents
-from app.services.embedding import EmbeddingService
+from app.pipeline.factory import PipelineFactory
+from app.pipeline.pipeline import ChatContextPipeline
 from app.config import (
     DEFAULT_LLM_MODEL, 
     CPU_LLM_MODEL, 
-    GPU_LLM_MODEL, 
-    MAX_CONTEXT_CHUNKS, 
-    MAX_HISTORY_LENGTH
+    GPU_LLM_MODEL
 )
 
 router = APIRouter(
@@ -35,10 +34,21 @@ def get_ollama_service(model: Optional[str] = None) -> OllamaService:
     return OllamaService(model=model or DEFAULT_LLM_MODEL)
 
 
+def get_pipeline() -> ChatContextPipeline:
+    """
+    Get a configured chat context pipeline
+    
+    Returns:
+        Configured ChatContextPipeline
+    """
+    return PipelineFactory.create_default_pipeline()
+
+
 @router.post("/", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
-    ollama_service: OllamaService = Depends(get_ollama_service)
+    ollama_service: OllamaService = Depends(get_ollama_service),
+    pipeline: ChatContextPipeline = Depends(get_pipeline)
 ):
     """
     🧩 **Neural Synthesis**: Communicate with a living digital consciousness enriched by your knowledge corpus
@@ -62,37 +72,37 @@ async def chat(
     # Get or create a session
     session_id = request.session_id or str(uuid.uuid4())
     
-    # Get or initialize context
-    context = chat_sessions.get(session_id, [])
+    # Get existing context/history
+    history = chat_sessions.get(session_id, [])
     
-    # Search query is either explicitly provided or is the message itself
-    search_query = request.search_query or request.message
-    search_results = []
+    # Prepare initial context for pipeline
+    pipeline_context = {
+        'message': request.message,
+        'session_id': session_id,
+        'search_query': request.search_query,
+        'include_context': request.include_context,
+        'timestamp': datetime.datetime.now().isoformat(),
+        'model': ollama_service.model,
+        'raw_history': history.copy(),
+        'system_message': "You are a helpful AI assistant with access to a knowledge base."
+    }
     
-    if request.include_context:
-        # Get embeddings for search
-        embedding_service = EmbeddingService()
-        query_embedding = embedding_service.get_embedding(search_query)
-        
-        # Search in vector database
-        search_hits = search_documents(query_embedding, MAX_CONTEXT_CHUNKS)
-        
-        # Format search results
-        for hits in search_hits:
-            for hit in hits:
-                search_results.append({
-                    "file_id": hit.entity.get('file_id'),
-                    "file_name": hit.entity.get('file_name'),
-                    "content": hit.entity.get('content'),
-                    "chunk_id": hit.entity.get('chunk_id'),
-                    "score": float(hit.score)
-                })
+    # Always use the pipeline with vector search
+    pipeline_to_use = pipeline
     
-    # Get response from LLM
-    response_data = ollama_service.search_and_respond(
-        query=request.message,
-        search_results=search_results,
-        context=context[-MAX_HISTORY_LENGTH:] if context else None
+    # Process the message through the pipeline
+    enriched_context = pipeline_to_use.process(pipeline_context)
+    
+    # Get search results from the enriched context
+    search_results = enriched_context.get('search_results', [])
+    
+    # Get formatted prompt for LLM
+    formatted_prompt = enriched_context.get('formatted_prompt')
+    
+    # Get response from LLM using the enriched context
+    response_data = ollama_service.generate_response(
+        prompt=formatted_prompt,
+        context=None  # Context is already included in the formatted prompt
     )
     
     # Extract the response
@@ -101,17 +111,70 @@ async def chat(
     
     assistant_message = response_data.get("message", {}).get("content", "")
     
+    # Perform a second vector search on the LLM's response to find additional relevant information
+    from app.services.embedding import EmbeddingService
+    embedding_service = EmbeddingService()
+    response_embedding = embedding_service.get_embedding(assistant_message)
+    
+    # Create a new pipeline for post-processing
+    post_pipeline = ChatContextPipeline()
+    post_pipeline.add_step(VectorSearchStep(max_results=MAX_CONTEXT_CHUNKS))
+    
+    # Process the LLM response through the post-pipeline
+    post_context = {
+        'message': assistant_message,
+        'message_embedding': response_embedding
+    }
+    post_results = post_pipeline.process(post_context)
+    
+    # Extract post-search results
+    post_search_results = post_results.get('search_results', [])
+    additional_info = ""
+    
+    # Generate a summary if relevant additional information is found
+    if post_search_results:
+        # Filter results to avoid duplicates with the original search
+        original_content_ids = [f"{r.get('file_id')}:{r.get('chunk_id')}" for r in search_results]
+        new_results = [r for r in post_search_results 
+                      if f"{r.get('file_id')}:{r.get('chunk_id')}" not in original_content_ids]
+        
+        if new_results:
+            # Format the additional information
+            additional_content = "\n\n".join([r['content'] for r in new_results[:3]])
+            
+            # Create a prompt for summarizing the additional information
+            summary_prompt = f"""Based on your previous response, I found some additional relevant information that might be helpful. 
+            Please create a brief summary of this information as it relates to your response:
+
+            {additional_content}
+
+            Provide a concise summary that enhances your previous response:"""
+            
+            # Get summary from LLM
+            summary_data = ollama_service.generate_response(
+                prompt=summary_prompt,
+                context=None
+            )
+            
+            if "error" not in summary_data:
+                additional_info = summary_data.get("message", {}).get("content", "")
+    
+    # Combine the original response with the additional info if any
+    final_response = assistant_message
+    if additional_info:
+        final_response = f"{assistant_message}\n\nAdditional relevant information:\n{additional_info}"
+    
     # Update context with new messages
-    context.append({"role": "user", "content": request.message})
-    context.append({"role": "assistant", "content": assistant_message})
+    history.append({"role": "user", "content": request.message})
+    history.append({"role": "assistant", "content": final_response})
     
     # Store updated context
-    chat_sessions[session_id] = context
+    chat_sessions[session_id] = history
     
     return ChatResponse(
-        response=assistant_message,
+        response=final_response,
         session_id=session_id,
-        search_results=search_results if request.include_context else None,
+        search_results=search_results,
         model=ollama_service.model
     )
 
