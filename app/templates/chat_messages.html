@@ -2,6 +2,16 @@
     {% for message in messages %}
         <div class="chat-message {% if message.role == 'user' %}chat-user{% else %}chat-assistant{% endif %}">
             <p>{{ message.content }}</p>
+            {% if message.role == 'assistant' %}
+            <div class="mt-2 text-right">
+                <button 
+                    class="context-toggle-btn text-xs bg-hacker-dark px-2 py-1 rounded border border-neon-cyan text-neon-cyan hover:bg-neon-cyan hover:bg-opacity-20 transition-all duration-200"
+                    onclick="showLastMessageContext(); return false;"
+                >
+                    <i class="fas fa-brain mr-1"></i> View Context Sources
+                </button>
+            </div>
+            {% endif %}
         </div>
     {% endfor %}
 {% else %}

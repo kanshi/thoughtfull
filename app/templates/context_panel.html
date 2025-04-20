@@ -1,0 +1,35 @@
+<!-- Context Panel Template -->
+<div id="context-panel" class="hidden fixed top-1/4 left-1/2 transform -translate-x-1/2 w-3/4 max-w-2xl z-50 bg-hacker-terminal border-2 border-neon-green border-opacity-70 rounded-lg shadow-2xl p-4 mb-4">
+    <div class="flex justify-between items-center mb-4">
+        <h3 class="text-neon-green text-lg font-mono"><i class="fas fa-brain mr-2"></i>Neural Context</h3>
+        <button id="close-context-panel" class="text-neon-cyan hover:text-neon-green transition-colors duration-200">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+    
+    <!-- Tabs for switching between document and conversation context -->
+    <div class="context-tabs flex border-b border-gray-700 mb-4">
+        <button id="tab-documents" class="context-tab active py-2 px-4 text-sm font-mono text-neon-cyan border-b-2 border-neon-cyan">
+            <i class="fas fa-file-alt mr-1"></i> Documents <span id="document-count" class="ml-1 bg-hacker-dark rounded-full px-2 py-0.5 text-xs">0</span>
+        </button>
+        <button id="tab-conversations" class="context-tab py-2 px-4 text-sm font-mono text-gray-400 border-b-2 border-transparent">
+            <i class="fas fa-comments mr-1"></i> Conversations <span id="conversation-count" class="ml-1 bg-hacker-dark rounded-full px-2 py-0.5 text-xs">0</span>
+        </button>
+    </div>
+    
+    <!-- Document Context Content -->
+    <div id="document-context-content" class="context-content-tab">
+        <div id="document-list" class="space-y-3 max-h-80 overflow-y-auto pr-2">
+            <!-- Documents will be added here dynamically -->
+            <div class="text-gray-400 text-sm font-mono text-center py-4">No document context available</div>
+        </div>
+    </div>
+    
+    <!-- Conversation Context Content -->
+    <div id="conversation-context-content" class="context-content-tab hidden">
+        <div id="conversation-list" class="space-y-3 max-h-80 overflow-y-auto pr-2">
+            <!-- Conversations will be added here dynamically -->
+            <div class="text-gray-400 text-sm font-mono text-center py-4">No conversation context available</div>
+        </div>
+    </div>
+</div>

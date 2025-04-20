@@ -33,6 +33,8 @@ class ChatResponse(BaseModel):
     response: str = Field(..., description="AI response message")
     session_id: str = Field(..., description="Session ID for the conversation")
     search_results: Optional[List[Dict[str, Any]]] = Field(None, description="Relevant search results")
+    document_context: Optional[List[Dict[str, Any]]] = Field(None, description="Document context used for prompting")
+    conversation_context: Optional[List[Dict[str, Any]]] = Field(None, description="Conversation context used for prompting")
     model: str = Field(..., description="LLM model used for response")
     
     

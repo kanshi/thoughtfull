@@ -1,0 +1,286 @@
+<!-- Ultra-Simple Context Panel Overlay -->
+<div id="context-overlay" class="fixed inset-0 bg-black bg-opacity-70 z-50" style="display:none;">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-hacker-terminal border-2 border-neon-green rounded-lg shadow-2xl p-5 w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+            <!-- Header with close button -->
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-700">
+                <h2 class="text-neon-green text-xl font-mono"><i class="fas fa-brain mr-2"></i>Context Sources</h2>
+                <button id="close-context-panel" class="text-neon-cyan hover:text-neon-green transition-colors">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+            
+            <!-- Simple tab navigation -->
+            <div class="flex mb-4 border-b border-gray-700">
+                <button id="tab-docs-btn" class="flex-1 py-2 text-neon-cyan border-b-2 border-neon-cyan">
+                    <i class="fas fa-file-alt mr-1"></i> Documents <span id="docs-count" class="ml-1 bg-black bg-opacity-30 rounded-full px-2 py-0.5">0</span>
+                </button>
+                <button id="tab-convs-btn" class="flex-1 py-2 text-gray-400 border-b-2 border-transparent">
+                    <i class="fas fa-comments mr-1"></i> Conversations <span id="convs-count" class="ml-1 bg-black bg-opacity-30 rounded-full px-2 py-0.5">0</span>
+                </button>
+            </div>
+            
+            <!-- Content container -->
+            <div class="flex-grow overflow-y-auto" style="max-height: calc(80vh - 130px);">
+                <!-- Documents tab content -->
+                <div id="tab-docs" class="h-full">
+                    <div id="docs-container" class="space-y-3">
+                        <div class="text-neon-cyan text-center py-8"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading document sources...</div>
+                    </div>
+                </div>
+                
+                <!-- Conversations tab content (hidden by default) -->
+                <div id="tab-convs" class="hidden h-full">
+                    <div id="convs-container" class="space-y-3">
+                        <div class="text-neon-cyan text-center py-8"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading conversation sources...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Initialize the context overlay when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Set up basic event listeners
+    const overlay = document.getElementById('context-overlay');
+    const closeBtn = document.getElementById('close-context-panel');
+    const docsTabBtn = document.getElementById('tab-docs-btn');
+    const convsTabBtn = document.getElementById('tab-convs-btn');
+    
+    // Close overlay when clicking close button
+    closeBtn.addEventListener('click', function() {
+        overlay.style.display = 'none';
+    });
+    
+    // Close overlay when clicking the backdrop
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            overlay.style.display = 'none';
+        }
+    });
+    
+    // Tab switching for documents
+    docsTabBtn.addEventListener('click', function() {
+        // Show documents tab
+        document.getElementById('tab-docs').classList.remove('hidden');
+        document.getElementById('tab-convs').classList.add('hidden');
+        // Update tab styling
+        docsTabBtn.classList.add('text-neon-cyan', 'border-neon-cyan');
+        docsTabBtn.classList.remove('text-gray-400', 'border-transparent');
+        convsTabBtn.classList.add('text-gray-400', 'border-transparent');
+        convsTabBtn.classList.remove('text-neon-cyan', 'border-neon-cyan');
+    });
+    
+    // Tab switching for conversations
+    convsTabBtn.addEventListener('click', function() {
+        // Show conversations tab
+        document.getElementById('tab-convs').classList.remove('hidden');
+        document.getElementById('tab-docs').classList.add('hidden');
+        // Update tab styling
+        convsTabBtn.classList.add('text-neon-cyan', 'border-neon-cyan');
+        convsTabBtn.classList.remove('text-gray-400', 'border-transparent');
+        docsTabBtn.classList.add('text-gray-400', 'border-transparent');
+        docsTabBtn.classList.remove('text-neon-cyan', 'border-neon-cyan');
+    });
+});
+
+// Global function to show context sources
+window.showLastMessageContext = function() {
+    // Get DOM elements
+    const overlay = document.getElementById('context-overlay');
+    const docsContainer = document.getElementById('docs-container');
+    const convsContainer = document.getElementById('convs-container');
+    const docsCount = document.getElementById('docs-count');
+    const convsCount = document.getElementById('convs-count');
+    
+    // Show loading state
+    docsContainer.innerHTML = '<div class="text-neon-cyan text-center py-8"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading document sources...</div>';
+    convsContainer.innerHTML = '<div class="text-neon-cyan text-center py-8"><i class="fas fa-circle-notch fa-spin mr-2"></i>Loading conversation sources...</div>';
+    docsCount.textContent = '0';
+    convsCount.textContent = '0';
+    
+    // Show the overlay
+    overlay.style.display = 'block';
+    
+    // Fetch context data with cache busting
+    const sessionId = document.getElementById('session_id').value;
+    fetch(`/chat/context?session_id=${sessionId}&t=${Date.now()}`)
+        .then(response => {
+            if (!response.ok) throw new Error(`Server responded with ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            // Process document sources
+            let documents = [];
+            
+            // Gather documents from different sources
+            if (Array.isArray(data.document_context)) {
+                documents = [...documents, ...data.document_context];
+            }
+            
+            if (Array.isArray(data.search_results)) {
+                const docResults = data.search_results.filter(item => 
+                    item.type === 'document' || (item.file_name && !item.session_id)
+                );
+                documents = [...documents, ...docResults];
+            }
+            
+            // Display documents
+            docsCount.textContent = documents.length;
+            
+            if (documents.length === 0) {
+                docsContainer.innerHTML = '<div class="text-gray-400 text-center py-6">No document sources available</div>';
+            } else {
+                docsContainer.innerHTML = '';
+                
+                // Add header
+                const header = document.createElement('div');
+                header.className = 'text-neon-cyan mb-4 text-center';
+                header.innerHTML = `<p><i class="fas fa-info-circle mr-1"></i> ${documents.length} document sources used</p>`;
+                docsContainer.appendChild(header);
+                
+                // Add each document
+                documents.forEach((doc, index) => {
+                    const docEl = document.createElement('div');
+                    docEl.className = 'mb-4 p-3 bg-hacker-dark rounded border border-gray-700';
+                    
+                    // Document content
+                    const content = document.createElement('p');
+                    content.className = 'text-gray-300 mb-2 whitespace-pre-wrap';
+                    content.textContent = doc.content || doc.text || 'No content available';
+                    
+                    // Citation
+                    const citation = document.createElement('p');
+                    citation.className = 'text-xs text-gray-400';
+                    citation.innerHTML = `Source: <span class="text-neon-cyan">${doc.file_name || 'Unknown'}</span>`;
+                    
+                    if (doc.score) {
+                        const score = (doc.score * 100).toFixed(1);
+                        citation.innerHTML += ` <span class="ml-2">(Relevance: <span class="text-neon-green">${score}%</span>)</span>`;
+                    }
+                    
+                    docEl.appendChild(content);
+                    docEl.appendChild(citation);
+                    docsContainer.appendChild(docEl);
+                });
+            }
+            
+            // Process conversation sources
+            let conversations = [];
+            
+            if (Array.isArray(data.conversation_context)) {
+                conversations = [...conversations, ...data.conversation_context];
+            }
+            
+            if (Array.isArray(data.search_results)) {
+                const convResults = data.search_results.filter(item => 
+                    item.type === 'conversation' || (item.session_id && item.role)
+                );
+                conversations = [...conversations, ...convResults];
+            }
+            
+            // Display conversations
+            convsCount.textContent = conversations.length;
+            
+            if (conversations.length === 0) {
+                convsContainer.innerHTML = '<div class="text-gray-400 text-center py-6">No conversation sources available</div>';
+            } else {
+                convsContainer.innerHTML = '';
+                
+                // Add header
+                const header = document.createElement('div');
+                header.className = 'text-neon-cyan mb-4 text-center';
+                header.innerHTML = `<p><i class="fas fa-info-circle mr-1"></i> ${conversations.length} conversation sources used</p>`;
+                convsContainer.appendChild(header);
+                
+                // Add each conversation
+                conversations.forEach((conv, index) => {
+                    const convEl = document.createElement('div');
+                    convEl.className = 'mb-4 p-3 bg-hacker-dark rounded border border-gray-700';
+                    
+                    // Header with role and timestamp
+                    const header = document.createElement('div');
+                    header.className = 'flex justify-between items-center mb-2';
+                    
+                    const role = document.createElement('span');
+                    role.className = conv.role === 'user' ? 'text-neon-green' : 'text-neon-cyan';
+                    role.textContent = conv.role || 'unknown';
+                    
+                    const timestamp = document.createElement('span');
+                    timestamp.className = 'text-xs text-gray-400';
+                    if (conv.timestamp) {
+                        const date = new Date(conv.timestamp);
+                        timestamp.textContent = date.toLocaleString();
+                    } else {
+                        timestamp.textContent = 'Unknown time';
+                    }
+                    
+                    header.appendChild(role);
+                    header.appendChild(timestamp);
+                    
+                    // Content
+                    const content = document.createElement('p');
+                    content.className = 'text-gray-300 whitespace-pre-wrap';
+                    content.textContent = conv.content || 'No content available';
+                    
+                    convEl.appendChild(header);
+                    convEl.appendChild(content);
+                    convsContainer.appendChild(convEl);
+                });
+            }
+            
+            // Show documents tab by default if there are documents
+            if (documents.length > 0) {
+                document.getElementById('tab-docs-btn').click();
+            } else if (conversations.length > 0) {
+                document.getElementById('tab-convs-btn').click();
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching context:', error);
+            docsContainer.innerHTML = `<div class="text-red-500 text-center py-6"><i class="fas fa-exclamation-triangle mr-2"></i>Error loading context: ${error.message}</div>`;
+            convsContainer.innerHTML = `<div class="text-red-500 text-center py-6"><i class="fas fa-exclamation-triangle mr-2"></i>Error loading context: ${error.message}</div>`;
+        });
+};
+</script>
+
+<style>
+/* Custom styles for context overlay */
+#context-panel-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+#context-panel-container::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+#context-panel-container::-webkit-scrollbar-thumb {
+    background: var(--neon-green);
+    border-radius: 3px;
+}
+
+.context-tab.active {
+    color: var(--neon-cyan);
+    border-color: var(--neon-cyan);
+}
+
+#document-list::-webkit-scrollbar,
+#conversation-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+#document-list::-webkit-scrollbar-track,
+#conversation-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+#document-list::-webkit-scrollbar-thumb,
+#conversation-list::-webkit-scrollbar-thumb {
+    background: var(--neon-green);
+    border-radius: 3px;
+}
+</style>

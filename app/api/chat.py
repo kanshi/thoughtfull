@@ -1,7 +1,12 @@
 import uuid
-import datetime
+import json
+import logging
+import copy
+from datetime import datetime
+from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import List, Optional, Dict, Any
+
+from app.services.context_manager import set_session_context
 
 from app.models.chat import ChatRequest, ChatResponse, ModelsResponse, ModelInfo
 from app.services.ollama import OllamaService
@@ -129,6 +134,12 @@ async def chat(
     
     # Extract post-search results
     post_search_results = post_results.get('search_results', [])
+    
+    # Log information about the search results for debugging
+    document_count = len([r for r in search_results if r.get('type') == 'document' or (r.get('file_name') and not r.get('session_id'))])
+    conversation_count = len([r for r in search_results if r.get('type') == 'conversation' or (r.get('session_id') and r.get('role'))])
+    logging.info(f"Session {session_id} search results: {len(search_results)} total, {document_count} documents, {conversation_count} conversations")
+    
     additional_info = ""
     
     # Generate a summary if relevant additional information is found
@@ -171,10 +182,51 @@ async def chat(
     # Store updated context
     chat_sessions[session_id] = history
     
+    # Ensure all results have a properly set type field
+    for result in search_results:
+        # If no type but has file_name and no session_id, it's a document
+        if not result.get('type'):
+            if result.get('file_name') and not result.get('session_id'):
+                result['type'] = 'document'
+            elif result.get('session_id') and result.get('role'):
+                result['type'] = 'conversation'
+    
+    # Now separate results by type for the response
+    document_results = [r for r in search_results if r.get('type') == 'document']
+    conversation_results = [r for r in search_results if r.get('type') == 'conversation']
+    
+    # Log the results for debugging
+    logging.info(f"Session {session_id} context: {len(document_results)} documents, {len(conversation_results)} conversations")
+    
+    # Make a deep copy of the results to avoid modifying originals
+    # Prepare context to show in the overlay
+    context_data = {
+        "document_context": copy.deepcopy(document_results),
+        "conversation_context": copy.deepcopy(conversation_results),
+        "search_results": copy.deepcopy(search_results)  # Include the complete search results as well
+    }
+    
+    # Make sure all document context items have proper content fields
+    for doc in context_data["document_context"]:
+        if not doc.get("content") and doc.get("text"):
+            doc["content"] = doc["text"]
+        if not doc.get("file_name"):
+            doc["file_name"] = "Knowledge Base"
+    
+    # Store using the context manager
+    set_session_context(session_id, context_data)
+    
+    # Log what we're storing in context for debugging
+    logging.info(f"Storing in context for session {session_id}: {len(document_results)} documents, "
+                f"{len(conversation_results)} conversations, "
+                f"{len(search_results)} search results total")
+    
     return ChatResponse(
         response=final_response,
         session_id=session_id,
         search_results=search_results,
+        document_context=document_results,
+        conversation_context=conversation_results,
         model=ollama_service.model
     )
 
@@ -262,6 +314,35 @@ async def get_session(session_id: str):
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
     
     return chat_sessions[session_id]
+
+
+# Context endpoint for direct access without going through web API
+@router.get("/context")
+async def get_context(session_id: str):
+    """
+    🧠 **Neural Transparency**: Examine the knowledge fragments that informed the response
+    
+    Reveal the underlying neural pathways and knowledge fragments that influenced
+    the most recent thought synthesis, providing transparency into the cognitive process.
+    
+    - **session_id**: Memory strand identifier to access context for
+    
+    Returns the document and conversation context used in the most recent response
+    """
+    from app.services.context_manager import get_session_context
+    context = get_session_context(session_id)
+    
+    # If search_results aren't in context and we have document_context, ensure backward compatibility
+    if 'search_results' not in context and 'document_context' in context:
+        # Create search_results from document_context for backward compatibility
+        context['search_results'] = context['document_context']
+        
+    # Log what we're returning for debugging
+    logging.info(f"Context for session {session_id}: {len(context.get('document_context', []))} documents, "
+                f"{len(context.get('conversation_context', []))} conversations, "
+                f"{len(context.get('search_results', []))} search results")
+    
+    return context
 
 
 @router.delete("/sessions/{session_id}", response_model=Dict[str, str])

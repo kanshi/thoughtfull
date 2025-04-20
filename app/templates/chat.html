@@ -307,7 +307,10 @@
 
 <div class="grid grid-cols-1 gap-6">
     <!-- Chat Interface -->
-    <div class="bg-hacker-medium p-6 rounded-lg shadow-md">
+    <div class="bg-hacker-medium p-6 rounded-lg shadow-md relative">
+        
+        <!-- Include Context Overlay Template -->
+        {% include "context_overlay.html" %}
         
         <div id="chat-container" class="chat-container rounded-lg bg-hacker-dark overflow-y-auto">
             <!-- Messages will appear here -->
@@ -315,6 +318,16 @@
                 {% for message in messages %}
                     <div class="chat-message {% if message.role == 'user' %}chat-user{% else %}chat-assistant{% endif %}">
                         <p>{{ message.content }}</p>
+                        {% if message.role == 'assistant' %}
+                        <div class="mt-2 text-right">
+                            <button 
+                                class="context-toggle-btn text-xs text-neon-cyan opacity-70 hover:opacity-100 transition-opacity duration-200"
+                                data-message-id="{{ loop.index }}"
+                            >
+                                <i class="fas fa-brain mr-1"></i> View Context Sources
+                            </button>
+                        </div>
+                        {% endif %}
                     </div>
                 {% endfor %}
             {% else %}
@@ -387,6 +400,56 @@
         if (modelDisplay) {
             modelDisplay.addEventListener('click', toggleStatusModelDropdown);
         }
+        
+        // Context panel functionality
+        setupContextPanel();
     });
+    
+    // Setup additional chat functionality
+    function setupContextPanel() {
+        // Add listeners after new content is loaded
+        document.addEventListener('htmx:afterOnLoad', function() {
+            // Ensure all context buttons work after HTMX refreshes the content
+            setupContextButtons();
+        });
+        
+        // Add listeners after form submission
+        document.getElementById('chat-form').addEventListener('submit', function() {
+            // Add a small delay to allow DOM updates
+            setTimeout(setupContextButtons, 500);
+        });
+        
+        // Initial setup
+        setupContextButtons();
+    }
+    
+    // Make sure all context buttons have click handlers
+    function setupContextButtons() {
+        const toggleButtons = document.querySelectorAll('.context-toggle-btn');
+        toggleButtons.forEach(btn => {
+            if (!btn.hasListener) {
+                // The click handler is defined in context_overlay.html
+                // This just makes sure it's properly attached to all buttons
+                btn.addEventListener('click', function() {
+                    console.log('Context button clicked for session:', document.getElementById('session_id').value);
+                    window.showLastMessageContext();
+                });
+                btn.hasListener = true;
+            }
+        });
+        
+        // Also set up any view-context-buttons that might exist
+        document.querySelectorAll('.view-context-button').forEach(button => {
+            if (!button.hasListener) {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('View context button clicked for session:', document.getElementById('session_id').value);
+                    window.showLastMessageContext();
+                });
+                button.hasListener = true;
+            }
+        });
+    }
 </script>
+
 {% endblock %}

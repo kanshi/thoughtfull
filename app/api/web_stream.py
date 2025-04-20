@@ -155,7 +155,8 @@ async def stream_chat_response(request: Request, session_id: str = Query(...), m
                         "file_name": hit.entity.get('file_name'),
                         "content": hit.entity.get('content'),
                         "chunk_id": hit.entity.get('chunk_id'),
-                        "score": score
+                        "score": score,
+                        "type": "document"  # Explicitly set type for document results
                     }
                     
                     # Only include results that meet the relevance threshold
@@ -249,6 +250,16 @@ async def stream_chat_response(request: Request, session_id: str = Query(...), m
             
             # Start the storage task without awaiting it
             asyncio.create_task(store_message_async())
+            
+            # Store the search results in the context manager for display in the UI
+            from app.services.context_manager import set_session_context
+            
+            # Store context information
+            set_session_context(session_id, {
+                "document_context": relevant_results,
+                "conversation_context": [],
+                "search_results": relevant_results
+            })
             
             # Signal that streaming is complete with context information
             has_context = len(relevant_results) > 0
