@@ -1,5 +1,5 @@
 <div class="chat-message {% if is_assistant %}chat-assistant{% else %}chat-user{% endif %}">
-    <p>{{ message }}</p>
+    <div class="markdown-content">{% if is_assistant %}{{ message|safe }}{% else %}{{ message }}{% endif %}</div>
     {% if is_assistant %}
     <div class="mt-2 text-right">
         <button 

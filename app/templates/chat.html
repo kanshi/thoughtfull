@@ -9,6 +9,28 @@
 
 {% block head_scripts %}
 <script>
+    // Configure marked.js options
+    document.addEventListener('DOMContentLoaded', function() {
+        marked.setOptions({
+            renderer: new marked.Renderer(),
+            highlight: function(code, language) {
+                const validLanguage = hljs.getLanguage(language) ? language : 'plaintext';
+                return hljs.highlight(code, {language: validLanguage}).value;
+            },
+            pedantic: false,
+            gfm: true,
+            breaks: true,
+            sanitize: false,
+            smartypants: true,
+            xhtml: false
+        });
+        
+        // Apply syntax highlighting to existing code blocks
+        document.querySelectorAll('.markdown-content pre code').forEach((block) => {
+            hljs.highlightElement(block);
+        });
+    });
+    
     // Debounce function to prevent multiple submissions
     let isSubmitting = false;
     
@@ -44,7 +66,7 @@
         // Append the user message to the chat container
         const userMessageHtml = `
             <div class="chat-message chat-user">
-                <p>${messageValue}</p>
+                <div class="markdown-content">${messageValue}</div>
             </div>
         `;
         chatContainer.insertAdjacentHTML('beforeend', userMessageHtml);
@@ -58,11 +80,11 @@
         // Add a loading message with typing indicator
         const assistantMessageHtml = `
             <div class="chat-message chat-assistant" id="assistant-response-${responseId}">
-                <p id="stream-content-${responseId}">
+                <div class="markdown-content" id="stream-content-${responseId}">
                     <span class="typing-indicator">
                         <span></span><span></span><span></span>
                     </span>
-                </p>
+                </div>
             </div>
         `;
         document.getElementById('chat-container').insertAdjacentHTML('beforeend', assistantMessageHtml);
@@ -116,6 +138,23 @@
                                 const assistantElement = document.getElementById(`assistant-response-${responseId}`);
                                 if (assistantElement) {
                                     assistantElement.outerHTML = html;
+                                    
+                                    // Process markdown in the new content after refresh
+                                    const newContentElements = document.querySelectorAll('.chat-assistant .markdown-content');
+                                    if (newContentElements.length > 0) {
+                                        // Process the newest message (last in the list)
+                                        const lastMessageContent = newContentElements[newContentElements.length - 1];
+                                        const rawMarkdown = lastMessageContent.textContent;
+                                        // Convert markdown to HTML and set it
+                                        lastMessageContent.innerHTML = marked.parse(rawMarkdown);
+                                        
+                                        // Apply syntax highlighting to code blocks in the new content
+                                        lastMessageContent.querySelectorAll('pre code').forEach((block) => {
+                                            if (!block.classList.contains('hljs')) {
+                                                hljs.highlightElement(block);
+                                            }
+                                        });
+                                    }
                                 }
                                 document.getElementById('chat-container').scrollTop = document.getElementById('chat-container').scrollHeight;
                             });
@@ -128,7 +167,15 @@
                         }
                         // Append the new content
                         fullContent += data.content;
-                        streamContent.innerHTML = fullContent;
+                        // Parse markdown and render
+                        streamContent.innerHTML = marked.parse(fullContent);
+                        
+                        // Apply syntax highlighting to code blocks
+                        document.querySelectorAll('#stream-content-' + responseId + ' pre code').forEach((block) => {
+                            if (!block.classList.contains('hljs')) {
+                                hljs.highlightElement(block);
+                            }
+                        });
                         
                         // Scroll to bottom
                         document.getElementById('chat-container').scrollTop = document.getElementById('chat-container').scrollHeight;
@@ -142,6 +189,7 @@
                     }
                 } catch (e) {
                     console.error("Error parsing stream data:", e, event.data);
+                    streamContent.innerHTML = marked.parse(`### Error parsing stream data\n\n${e.toString()}\n\n${event.data}`);
                 }
             };
             
@@ -150,11 +198,11 @@
                 eventSource.close();
                 
                 // Show error message
-                streamContent.innerHTML = "<span class='text-neon-pink'>Error:</span> Connection to server lost. Please try again.";
+                streamContent.innerHTML = `<span class="text-neon-pink">Error:</span> Connection to server lost. Please try again.`;
                 
                 // Fallback: If we get an error and no content was displayed, show a fallback message
                 if (fullContent === '') {
-                    streamContent.innerHTML = "<span class='text-neon-pink'>Error:</span> Could not connect to the LLM. Please make sure Ollama is running and the model is available.";
+                    streamContent.innerHTML = `<span class="text-neon-pink">Error:</span> Could not connect to the LLM. Please make sure Ollama is running and the model is available.`;
                 }
             };
         })
@@ -282,6 +330,32 @@
 {% endblock %}
 
 {% block content %}
+<script>
+    // Function to process all markdown content in the chat
+    function processAllMarkdownContent() {
+        // Process all chat assistant markdown content
+        document.querySelectorAll('.chat-assistant .markdown-content').forEach(function(element) {
+            const rawMarkdown = element.textContent.trim();
+            if (rawMarkdown) {
+                // Parse markdown and set innerHTML
+                element.innerHTML = marked.parse(rawMarkdown);
+                
+                // Apply syntax highlighting to code blocks
+                element.querySelectorAll('pre code').forEach((block) => {
+                    if (!block.classList.contains('hljs')) {
+                        hljs.highlightElement(block);
+                    }
+                });
+            }
+        });
+    }
+    
+    // Process all markdown when the page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        // Wait a moment for all content to load
+        setTimeout(processAllMarkdownContent, 100);
+    });
+</script>
 <header class="mb-8 mt-4">
     <h1 class="text-3xl font-bold text-white mb-2 flex items-center">
         <span class="text-neon-cyan mr-2"><i class="fas fa-terminal"></i></span> Neural Interface

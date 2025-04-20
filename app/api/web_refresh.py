@@ -65,6 +65,9 @@ async def refresh_chat_message(
         show_context = len(relevant_results) > 0
         
         # Return HTML response with the assistant message and document context
+        from markupsafe import Markup
+        
+        # We'll just pass the raw markdown text - client-side rendering will handle it
         return templates.TemplateResponse(
             "chat_message.html",
             {
