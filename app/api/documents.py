@@ -7,16 +7,22 @@ from app.models.schemas import UploadResponse, ErrorResponse
 from app.services.document_processor import DocumentProcessor
 from app.config import MAX_FILE_SIZE
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+router = APIRouter(
+    prefix="/documents", 
+    tags=["documents"]
+)
 
 @router.post("/upload", response_model=UploadResponse, responses={400: {"model": ErrorResponse}})
 async def upload_document(file: UploadFile = File(...)):
     """
-    Upload and process a document for semantic search
+    🧠 **Neural Ingestion**: Transform static documents into vibrant thought particles
     
-    - **file**: PDF or TXT file to upload
+    Upload your knowledge artifacts (PDF, TXT) to be embedded into the neural fabric.
+    Each document will be processed, chunked, and vectorized for semantic retrieval.
     
-    Returns file_id and number of chunks processed
+    - **file**: Knowledge artifact (PDF or TXT) to be neurally encoded
+    
+    Returns a unique neural identifier and quantification of thought fragments generated
     """
     processor = DocumentProcessor()
     

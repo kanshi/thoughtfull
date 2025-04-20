@@ -102,7 +102,7 @@ When running Milvus with Docker Compose, it creates a Docker network named `milv
 2. Upload your documents to create your neural knowledge base
 3. Enter The Matrix to begin conversing with your contextualized knowledge
 
-For API details, visit the Swagger UI documentation at `http://localhost:8000/docs`
+For API details, visit the Swagger UI documentation at `http://localhost:8000/neural-schema` or `http://localhost:8000/neural-interface`.
 
 ## 🗄️ Milvus Configuration
 

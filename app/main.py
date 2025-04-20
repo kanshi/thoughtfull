@@ -22,9 +22,19 @@ BASE_DIR = pathlib.Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 app = FastAPI(
-    title="ThoughtFull - Semantic Search API",
-    description="A semantic search service for private documents",
-    version="1.0.0"
+    title="ThoughtFull 🧠 - Neural Nexus of Thoughts and Memories",
+    description="""
+    **ThoughtFull** isn't just a semantic search API — it's a **neural ecosystem** where your documents 
+    become active thought particles in a living digital consciousness. 
+    
+    This API provides pathways to upload documents, transform static data into vector-embedded neural pathways,
+    perform semantic searches, and engage in contextualized conversations powered by your knowledge corpus.
+    
+    All while maintaining sovereignty over your data and compute resources through local-first principles.
+    """,
+    version="1.0.0",
+    docs_url="/neural-interface",
+    redoc_url="/neural-schema"
 )
 
 app.add_middleware(

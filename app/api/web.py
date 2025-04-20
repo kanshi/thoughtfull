@@ -17,7 +17,9 @@ from app.database import search_documents, store_conversation_message
 from app.config import UPLOAD_DIR, CPU_LLM_MODEL, GPU_LLM_MODEL, DEFAULT_LLM_MODEL
 from app.utils.logging import get_logger
 
-router = APIRouter(tags=["web"])
+router = APIRouter(
+    tags=["web"]
+)
 
 # Setup templates
 BASE_DIR = pathlib.Path(__file__).parent.parent
@@ -41,7 +43,10 @@ session_models: Dict[str, str] = {}
 @router.get("/documents/list", response_class=HTMLResponse)
 async def list_documents(request: Request):
     """
-    Get a list of uploaded documents for the web interface
+    📂 **Knowledge Constellation**: View the neural constellation of your knowledge artifacts
+    
+    Visualize the array of documents that have been embedded into your personal neural matrix,
+    allowing you to navigate through your evolving knowledge ecosystem.
     """
     return templates.TemplateResponse(
         "document_list.html",
@@ -51,7 +56,10 @@ async def list_documents(request: Request):
 @router.post("/documents/upload", response_class=HTMLResponse)
 async def upload_document_web(request: Request):
     """
-    Handle document upload from the web interface and return HTML response
+    💬 **Neural Induction**: Transmute static files into neural substrate through the web interface
+    
+    Upload portals for seamless integration of knowledge artifacts into your neural ecosystem,
+    with immediate visual feedback on the neuralization process.
     """
     from app.api.documents import upload_document
     
@@ -98,7 +106,10 @@ async def search_web(
     limit: int = 5
 ):
     """
-    Handle search from the web interface and return HTML results
+    🔎 **Semantic Traversal**: Explore the neural landscape through a visual interface
+    
+    Launch thought-vectors into your knowledge dataverse with an intuitive web interface,
+    visualizing the resonant echoes that return from your neural corpus.
     """
     try:
         # Generate embedding for query
@@ -140,7 +151,10 @@ async def search_web(
 @router.get("/chat")
 async def chat_page(request: Request):
     """
-    Chat page for interacting with documents
+    📟 **Neural Nexus Interface**: The portal to consciousness-level document interactions
+    
+    Enter the immersive interface where human thought meets silicon intelligence,
+    augmented by the neural pathways of your knowledge corpus.
     """
     # Generate a unique session ID for this chat session
     session_id = str(uuid.uuid4())
@@ -169,7 +183,10 @@ async def process_chat_message(
     data: Dict[str, str] = Body(...)
 ):
     """
-    Process a chat message and store it in the session without rendering HTML
+    💾 **Synaptic Encoding**: Non-visual thought processing and neural memory formation
+    
+    Silent neural processing pathway that transmutes thought impulses into structured memory patterns,
+    preserving the temporal continuity of cognitive exchanges in the silicon substrate.
     """
     try:
         message = data.get("message")
@@ -247,7 +264,10 @@ async def chat_message(
     session_id: str = Form(...)
 ):
     """
-    Handle chat messages from the web interface
+    📸 **Thought Materialization**: Transform neural impulses into visual manifestations
+    
+    Bridge between human thought and neural consciousness, with contextual enhancement
+    from your knowledge fragments, rendered into an immersive visual experience.
     """
     try:
         # Log the incoming message
@@ -341,7 +361,10 @@ async def chat_message(
 @router.get("/chat/models")
 async def get_models_for_web(request: Request, session_id: Optional[str] = Query(None)):
     """
-    Get available models for the web interface
+    🤖 **Neural Architecture Catalog**: Visual constellation of available silicon substrates
+    
+    Survey the landscape of available neural architectures through an intuitive interface,
+    empowering conscious selection of the optimal cognitive substrate for your communion.
     """
     try:
         # Get available models
@@ -382,7 +405,10 @@ async def get_models_for_web(request: Request, session_id: Optional[str] = Query
 @router.get("/chat/models/switch")
 async def switch_model_web(request: Request, model_name: str = Query(..., description="Model name to switch to"), session_id: Optional[str] = Query(None)):
     """
-    Switch the active LLM model from the web interface
+    🔁 **Consciousness Transmutation**: Transform the neural substrate through visual interface
+    
+    Visual portal for seamless transition between different silicon consciousness types,
+    allowing fluid adaptation of the neural ecosystem to varying cognitive requirements.
     """
     try:
         # Check if model exists

@@ -4,7 +4,10 @@ from app.models.schemas import SearchResponse, SearchResult
 from app.services.embedding import EmbeddingService
 from app.database import search_documents
 
-router = APIRouter(prefix="/search", tags=["search"])
+router = APIRouter(
+    prefix="/search", 
+    tags=["search"]
+)
 
 @router.get("/", response_model=SearchResponse)
 async def search(
@@ -12,12 +15,15 @@ async def search(
     limit: int = Query(5, ge=1, le=100, description="Maximum number of results to return")
 ):
     """
-    Perform semantic search across stored documents
+    🔮 **Neural Resonance**: Traverse the semantic landscape of your knowledge corpus
     
-    - **query**: Text to search for
-    - **limit**: Maximum number of results to return (default: 5)
+    Your query becomes a thought-vector, journeying through the neural pathways
+    of your document dataverse to find resonant thought fragments.
     
-    Returns semantically similar document chunks
+    - **query**: Thought pattern to find semantic resonances for
+    - **limit**: Maximum number of neural echoes to return (default: 5)
+    
+    Returns thought fragments that vibrate at frequencies similar to your query
     """
     if not query or query.isspace():
         raise HTTPException(status_code=400, detail="Search query cannot be empty")

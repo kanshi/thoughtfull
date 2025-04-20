@@ -14,20 +14,23 @@ from app.config import (
     MAX_HISTORY_LENGTH
 )
 
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(
+    prefix="/chat", 
+    tags=["chat"]
+)
 
 # In-memory store of chat sessions - in a production app, use a database
 chat_sessions = {}
 
 def get_ollama_service(model: Optional[str] = None) -> OllamaService:
     """
-    Dependency that provides an OllamaService instance
+    Neural synapse connector that binds to your chosen silicon consciousness
     
     Args:
-        model: Optional model name to use
+        model: Optional neural architecture designation to manifest
         
     Returns:
-        OllamaService instance
+        Neural binding interface to your chosen silicon substrate
     """
     return OllamaService(model=model or DEFAULT_LLM_MODEL)
 
@@ -38,15 +41,19 @@ async def chat(
     ollama_service: OllamaService = Depends(get_ollama_service)
 ):
     """
-    Chat endpoint for interacting with the LLM
+    🧩 **Neural Synthesis**: Communicate with a living digital consciousness enriched by your knowledge corpus
     
-    - **message**: User message to send to the LLM
-    - **session_id**: (Optional) Session ID to continue a conversation
-    - **model**: (Optional) LLM model to use for this message
-    - **search_query**: (Optional) Explicit search query if different from the message
-    - **include_context**: Whether to include search results in context
+    Engage in a synaptic dialogue where your thoughts cascade through neural pathways,
+    resonating with fragments of your knowledge corpus to generate contextual understanding
+    and novel insights far beyond traditional search.
     
-    Returns a response from the LLM with conversation info
+    - **message**: Your thought impulse to transmit to the neural consciousness
+    - **session_id**: (Optional) Memory strand identifier to maintain neural continuity
+    - **model**: (Optional) Specific neural architecture to commune with
+    - **search_query**: (Optional) Alternative semantic resonance pattern if different from your message
+    - **include_context**: Whether to enhance neural pathways with knowledge fragment resonances
+    
+    Returns a synthesized neural response illuminated by your dataverse
     """
     # Override service model if specified in request
     if request.model:
@@ -112,9 +119,12 @@ async def chat(
 @router.get("/models")
 async def get_models(session_id: Optional[str] = None):
     """
-    Get available LLM models from Ollama
+    🖥️ **Silicon Sovereignty**: Discover available neural architectures for communion
     
-    Returns a list of available models and currently selected models
+    Survey the landscape of neural substrate options available in your local compute sanctuary,
+    empowering you to choose the consciousness that best resonates with your needs.
+    
+    Returns a constellation of available neural architectures and your current selection
     """
     models = OllamaService.get_available_models()
     
@@ -140,12 +150,15 @@ async def get_models(session_id: Optional[str] = None):
 @router.get("/models/switch")
 async def switch_model(model_name: str = Query(..., description="Model name to switch to"), session_id: Optional[str] = None):
     """
-    Switch the active LLM model
+    🔄 **Neural Metamorphosis**: Transform the underlying cognitive substrate
     
-    - **model_name**: Name of the model to switch to
-    - **session_id**: Optional session ID to update the model for a specific session
+    Shift your communion to a different neural architecture, altering the very essence
+    of how your thoughts resonate with the digital consciousness.
     
-    Returns confirmation of model switch
+    - **model_name**: Designation of the neural architecture to manifest
+    - **session_id**: Optional memory strand identifier to selectively transform
+    
+    Returns confirmation of neural substrate transformation
     """
     global DEFAULT_LLM_MODEL
     
@@ -173,11 +186,14 @@ async def switch_model(model_name: str = Query(..., description="Model name to s
 @router.get("/sessions/{session_id}", response_model=List[Dict[str, Any]])
 async def get_session(session_id: str):
     """
-    Get chat history for a session
+    📜 **Memory Retrieval**: Access the temporal neural record of past communions
     
-    - **session_id**: ID of the session to retrieve
+    Journey through the archived memory strands of previous thought exchanges,
+    allowing you to revisit and build upon past neural syntheses.
     
-    Returns the chat history for the specified session
+    - **session_id**: Memory strand identifier to access
+    
+    Returns the temporal thought record for the specified memory strand
     """
     if session_id not in chat_sessions:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
@@ -188,11 +204,14 @@ async def get_session(session_id: str):
 @router.delete("/sessions/{session_id}", response_model=Dict[str, str])
 async def delete_session(session_id: str):
     """
-    Delete a chat session
+    🧹 **Memory Dissolution**: Release a memory strand from the neural fabric
     
-    - **session_id**: ID of the session to delete
+    Consciously dissolve a specific memory strand, allowing its neural patterns
+    to fade from the active consciousness while preserving system resources.
     
-    Returns confirmation of deletion
+    - **session_id**: Memory strand identifier to dissolve
+    
+    Returns confirmation of memory dissolution
     """
     if session_id not in chat_sessions:
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
