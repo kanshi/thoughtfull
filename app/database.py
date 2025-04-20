@@ -1,3 +1,4 @@
+import logging
 from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
 import numpy as np
 from typing import List, Dict, Any, Optional
@@ -6,21 +7,18 @@ from app.config import MILVUS_HOST, MILVUS_PORT, COLLECTION_NAME, VECTOR_DIMENSI
 
 def connect_to_milvus():
     # Print the configuration values before connecting
-    print(f"Attempting to connect to Milvus using host: {MILVUS_HOST}, port: {MILVUS_PORT}")
-    
-    # Ensure we're using the correct values
-    print(f"Config values directly from config module: {MILVUS_HOST}:{MILVUS_PORT}")
+    logging.info(f"Attempting to connect to Milvus using host: {MILVUS_HOST}, port: {MILVUS_PORT}")
     
     connections.connect(
         alias="default", 
         host=MILVUS_HOST, 
         port=MILVUS_PORT
     )
-    print(f"Connected to Milvus server at {MILVUS_HOST}:{MILVUS_PORT}")
+    logging.info(f"Connected to Milvus server at {MILVUS_HOST}:{MILVUS_PORT}")
 
 def create_collection_if_not_exists():
     if utility.has_collection(COLLECTION_NAME):
-        print(f"Collection '{COLLECTION_NAME}' already exists")
+        logging.info(f"Collection '{COLLECTION_NAME}' already exists")
         return Collection(COLLECTION_NAME)
     
     fields = [
@@ -42,7 +40,7 @@ def create_collection_if_not_exists():
         "params": {"M": 8, "efConstruction": 64}
     }
     collection.create_index(field_name="embedding", index_params=index_params)
-    print(f"Created collection '{COLLECTION_NAME}' and index")
+    logging.info(f"Created collection '{COLLECTION_NAME}' and index")
     
     return collection
 
@@ -50,7 +48,7 @@ def create_collection_if_not_exists():
 def create_conversation_collection_if_not_exists():
     """Create a collection for storing conversation history if it doesn't exist"""
     if utility.has_collection(CONVERSATION_COLLECTION):
-        print(f"Collection '{CONVERSATION_COLLECTION}' already exists")
+        logging.info(f"Collection '{CONVERSATION_COLLECTION}' already exists")
         return Collection(CONVERSATION_COLLECTION)
     
     fields = [
@@ -75,7 +73,7 @@ def create_conversation_collection_if_not_exists():
         "params": {"M": 8, "efConstruction": 64}
     }
     collection.create_index(field_name="embedding", index_params=index_params)
-    print(f"Created collection '{CONVERSATION_COLLECTION}' and index")
+    logging.info(f"Created collection '{CONVERSATION_COLLECTION}' and index")
     
     return collection
 
@@ -95,9 +93,9 @@ def recreate_collection():
     
     # Check if collection exists and drop it
     if utility.has_collection(COLLECTION_NAME):
-        print(f"Dropping existing collection '{COLLECTION_NAME}'")
+        logging.info(f"Dropping existing collection '{COLLECTION_NAME}'")
         utility.drop_collection(COLLECTION_NAME)
-        print(f"Collection '{COLLECTION_NAME}' dropped successfully")
+        logging.info(f"Collection '{COLLECTION_NAME}' dropped successfully")
     
     # Create new collection with current configuration
     return create_collection_if_not_exists()
@@ -109,9 +107,9 @@ def recreate_conversation_collection():
     
     # Check if collection exists and drop it
     if utility.has_collection(CONVERSATION_COLLECTION):
-        print(f"Dropping existing collection '{CONVERSATION_COLLECTION}'")
+        logging.info(f"Dropping existing collection '{CONVERSATION_COLLECTION}'")
         utility.drop_collection(CONVERSATION_COLLECTION)
-        print(f"Collection '{CONVERSATION_COLLECTION}' dropped successfully")
+        logging.info(f"Collection '{CONVERSATION_COLLECTION}' dropped successfully")
     
     # Create new collection with current configuration
     return create_conversation_collection_if_not_exists()
@@ -138,11 +136,11 @@ def insert_documents(chunks, embeddings, file_id, file_name):
     ]
     
     try:
-        print(f"Inserting {num_chunks} chunks with file_id: {file_id}, file_name: {file_name}")
+        logging.info(f"Inserting {num_chunks} chunks with file_id: {file_id}, file_name: {file_name}")
         mr = collection.insert(data)
-        print(f"Insert result: {mr}")
+        logging.info(f"Insert result: {mr}")
     except Exception as e:
-        print(f"Error during insertion: {str(e)}")
+        logging.error(f"Error during insertion: {str(e)}")
         raise
     
     # Ensure data is searchable immediately
@@ -202,13 +200,13 @@ def store_conversation_message(session_id: str, role: str, content: str, embeddi
     ]
     
     try:
-        print(f"Storing conversation message for session {session_id}, sequence {sequence}")
+        logging.info(f"Storing conversation message for session {session_id}, sequence {sequence}")
         mr = collection.insert(data)
-        print(f"Insert result: {mr}")
+        logging.debug(f"Insert result: {mr}")
         collection.flush()
         return True
     except Exception as e:
-        print(f"Error storing conversation message: {str(e)}")
+        logging.error(f"Error storing conversation message: {str(e)}")
         return False
 
 

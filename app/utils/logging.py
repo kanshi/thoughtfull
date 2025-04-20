@@ -41,7 +41,7 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_object)
 
 def setup_logging(log_level: str = "INFO", 
-                  enable_json_logs: bool = True,
+                  enable_json_logs: bool = False,
                   log_to_file: bool = True) -> None:
     """
     Set up logging configuration for the application.
@@ -81,14 +81,7 @@ def setup_logging(log_level: str = "INFO",
         log_file = logs_dir / f"thoughtfull_{datetime.now().strftime('%Y%m%d')}.log"
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(numeric_level)
-        
-        if enable_json_logs:
-            file_formatter = JsonFormatter()
-        else:
-            file_formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            )
-            
+        file_formatter = JsonFormatter()
         file_handler.setFormatter(file_formatter)
         root_logger.addHandler(file_handler)
     

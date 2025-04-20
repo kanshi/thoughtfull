@@ -14,7 +14,7 @@ from app.config import UPLOAD_DIR
 from app.utils.logging import setup_logging, get_logger
 
 # Setup logging first
-setup_logging(log_level="INFO", enable_json_logs=True, log_to_file=True)
+setup_logging(log_level="INFO", enable_json_logs=False, log_to_file=True)
 logger = get_logger(__name__)
 
 # Setup templates and static files
