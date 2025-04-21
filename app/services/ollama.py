@@ -247,7 +247,7 @@ class OllamaService:
             context_text = conversation_context
         
         system_prompt = """You are an AI assistant that helps answer questions based on the provided context.
-Base your answers primarily on the information in the documents and past conversations provided.
+Use the context information from the documents and past conversations provided.
 When citing information from documents, mention the document name.
 Avoid talking too much about your sources without a specific reference.
 If the provided context doesn't contain relevant information to answer the question, ignore that.
