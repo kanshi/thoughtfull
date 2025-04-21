@@ -7,6 +7,9 @@ from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.services.context_manager import set_session_context
+from app.services.embedding import EmbeddingService
+from app.database import store_conversation_message
+from app.pipeline.steps.vector_search import VectorSearchStep
 
 from app.models.chat import ChatRequest, ChatResponse, ModelsResponse, ModelInfo
 from app.services.ollama import OllamaService
@@ -123,22 +126,48 @@ async def chat(
     
     # Create a new pipeline for post-processing
     post_pipeline = ChatContextPipeline()
-    post_pipeline.add_step(VectorSearchStep(max_results=MAX_CONTEXT_CHUNKS))
+    
+    # Create a vector search step with explicit parameters to ensure conversation inclusion
+    vector_search_step = VectorSearchStep(
+        max_results=MAX_CONTEXT_CHUNKS,
+        include_conversations=True,
+        conversation_results_ratio=0.5,  # Equal weight to conversations vs documents
+        score_threshold=0.5  # Lower threshold to include more relevant conversations
+    )
+    post_pipeline.add_step(vector_search_step)
     
     # Process the LLM response through the post-pipeline
     post_context = {
         'message': assistant_message,
-        'message_embedding': response_embedding
+        'message_embedding': response_embedding,
+        'session_id': session_id  # Add session_id to post context for better context handling
     }
     post_results = post_pipeline.process(post_context)
     
     # Extract post-search results
     post_search_results = post_results.get('search_results', [])
     
-    # Log information about the search results for debugging
+    # Log detailed information about the search results for debugging
     document_count = len([r for r in search_results if r.get('type') == 'document' or (r.get('file_name') and not r.get('session_id'))])
     conversation_count = len([r for r in search_results if r.get('type') == 'conversation' or (r.get('session_id') and r.get('role'))])
-    logging.info(f"Session {session_id} search results: {len(search_results)} total, {document_count} documents, {conversation_count} conversations")
+    
+    logging.info(f"=== SEARCH RESULTS SUMMARY FOR SESSION {session_id} ===")
+    logging.info(f"Total results: {len(search_results)}")
+    logging.info(f"Document results: {document_count}")
+    logging.info(f"Conversation results: {conversation_count}")
+    
+    # Log conversation results in detail if any exist
+    if conversation_count > 0:
+        conversation_results_list = [r for r in search_results if r.get('type') == 'conversation' or (r.get('session_id') and r.get('role'))]
+        logging.info(f"Conversation search results details:")
+        for i, conv in enumerate(conversation_results_list):
+            logging.info(f"  [{i+1}] session_id={conv.get('session_id')}, role={conv.get('role')}, "
+                        f"score={conv.get('score', 'N/A')}, timestamp={conv.get('timestamp', 'N/A')}, "
+                        f"content_preview='{conv.get('content', '')[:50]}...'")
+    else:
+        logging.info("No conversation results found in search results")
+        
+    logging.info(f"=== END SEARCH RESULTS SUMMARY ===\n")
     
     additional_info = ""
     
@@ -182,6 +211,53 @@ async def chat(
     # Store updated context
     chat_sessions[session_id] = history
     
+    # Create embedding service if not already created
+    embedding_service = EmbeddingService()
+    
+    # Store user message in vector database
+    if request.message and request.message.strip():
+        user_embedding = embedding_service.get_embedding(request.message)
+        
+        # Get the previous assistant message if it exists
+        previous_assistant_message = None
+        if len(history) > 2:  # At least one previous exchange has occurred
+            # Get the last assistant message before this user message
+            previous_assistant_message = {
+                "role": "assistant",
+                "content": history[-3]["content"] if len(history) >= 3 else "",
+                "sequence": len(history) - 3 if len(history) >= 3 else -1
+            }
+            
+        store_conversation_message(
+            session_id=session_id,
+            role="user",
+            content=request.message,
+            embedding=user_embedding,
+            sequence=len(history) - 2,  # Account for 0-indexing and the assistant message
+            metadata={"timestamp": datetime.now().isoformat()},
+            related_message=previous_assistant_message
+        )
+    
+    # Store assistant response in vector database
+    assistant_embedding = embedding_service.get_embedding(final_response)
+    
+    # Include the user message that this is responding to
+    user_message = {
+        "role": "user",
+        "content": request.message,
+        "sequence": len(history) - 2  # The user message is the second-to-last in history
+    }
+    
+    store_conversation_message(
+        session_id=session_id,
+        role="assistant",
+        content=final_response,
+        embedding=assistant_embedding,
+        sequence=len(history) - 1,
+        metadata={"timestamp": datetime.now().isoformat()},
+        related_message=user_message
+    )
+    
     # Ensure all results have a properly set type field
     for result in search_results:
         # If no type but has file_name and no session_id, it's a document
@@ -215,6 +291,23 @@ async def chat(
     
     # Store using the context manager
     set_session_context(session_id, context_data)
+    
+    # Enhanced logging for conversation tracking
+    logging.info(f"=== CONTEXT DATA FOR SESSION {session_id} ===")
+    logging.info(f"Documents: {len(document_results)}")
+    logging.info(f"Conversations: {len(conversation_results)}")
+    logging.info(f"Total search results: {len(search_results)}")
+    
+    # Log conversation content for debugging
+    if conversation_results:
+        logging.info(f"Conversation context details:")
+        for i, conv in enumerate(conversation_results):
+            logging.info(f"  [{i+1}] session_id={conv.get('session_id')}, role={conv.get('role')}, "
+                        f"score={conv.get('score', 'N/A')}, content_preview='{conv.get('content', '')[:50]}...'")
+    else:
+        logging.info("No conversation context found in search results")
+        
+    logging.info(f"=== END CONTEXT DATA FOR SESSION {session_id} ===\n")
     
     # Log what we're storing in context for debugging
     logging.info(f"Storing in context for session {session_id}: {len(document_results)} documents, "
@@ -330,13 +423,60 @@ async def get_context(session_id: str):
     Returns the document and conversation context used in the most recent response
     """
     from app.services.context_manager import get_session_context
+    from app.database import get_conversation_history
+    
+    # Get context from session context manager
     context = get_session_context(session_id)
     
     # If search_results aren't in context and we have document_context, ensure backward compatibility
     if 'search_results' not in context and 'document_context' in context:
         # Create search_results from document_context for backward compatibility
         context['search_results'] = context['document_context']
-        
+    
+    # Check if we need to fetch conversations from the database
+    if 'conversation_context' not in context or not context['conversation_context']:
+        # Try to retrieve conversation history from the database
+        logging.info(f"No conversation_context in session, fetching from database for session {session_id}")
+        try:
+            conversation_history = get_conversation_history(session_id)
+            # Format conversation history for context
+            if conversation_history:
+                conversation_context = [{
+                    'type': 'conversation',
+                    'session_id': item.get('session_id'),
+                    'role': item.get('role'),
+                    'content': item.get('content'),
+                    'timestamp': item.get('timestamp'),
+                    'chunk_id': item.get('chunk_id')
+                } for item in conversation_history]
+                
+                # Add the fetched conversation context
+                context['conversation_context'] = conversation_context
+                
+                # Only add to search_results if they're not already included and not from the current session
+                if 'search_results' in context:
+                    # Check if conversation items are already in search_results
+                    existing_conv_ids = set()
+                    for result in context['search_results']:
+                        if result.get('type') == 'conversation' and result.get('chunk_id'):
+                            existing_conv_ids.add(result.get('chunk_id'))
+                    
+                    # Only add conversations that aren't already in search_results and aren't from the current session
+                    for conv in conversation_context:
+                        # Skip messages from the current conversation
+                        if conv.get('session_id') == session_id:
+                            continue
+                            
+                        if conv.get('chunk_id') not in existing_conv_ids:
+                            # Add a score field for display consistency
+                            conv_with_score = conv.copy()
+                            conv_with_score['score'] = 0.7  # Reasonable default score for historical items
+                            context['search_results'].append(conv_with_score)
+                
+                logging.info(f"Added {len(conversation_context)} conversation items from database")
+        except Exception as e:
+            logging.error(f"Error retrieving conversation history: {str(e)}")
+    
     # Log what we're returning for debugging
     logging.info(f"Context for session {session_id}: {len(context.get('document_context', []))} documents, "
                 f"{len(context.get('conversation_context', []))} conversations, "

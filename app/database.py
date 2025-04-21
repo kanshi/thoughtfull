@@ -168,81 +168,208 @@ def search_documents(query_embedding, limit=5):
     return results
 
 
-def store_conversation_message(session_id: str, role: str, content: str, embedding: np.ndarray, sequence: int, metadata: Optional[Dict[str, Any]] = None):
-    """Store a conversation message in Milvus"""
-    collection = get_conversation_collection()
+def store_conversation_message(session_id: str, role: str, content: str, embedding: np.ndarray, sequence: int, metadata: Optional[Dict[str, Any]] = None, related_message: Optional[Dict[str, Any]] = None):
+    """
+    Store a conversation message in Milvus
     
-    # Convert embedding to numpy array if not already
-    if not isinstance(embedding, np.ndarray):
-        embedding = np.array(embedding, dtype=np.float32)
+    Args:
+        session_id: The session ID for the conversation
+        role: The role of the message sender (user or assistant)
+        content: The content of the message
+        embedding: The vector embedding of the message
+        sequence: The sequence number of the message in the conversation
+        metadata: Optional metadata for the message
+        related_message: Optional related message (the message this is responding to or the response to this message)
+    """
+    logging.info(f"=== STORING CONVERSATION MESSAGE ===")
+    logging.info(f"Session ID: {session_id}")
+    logging.info(f"Role: {role}")
+    logging.info(f"Sequence: {sequence}")
+    logging.info(f"Content preview: '{content[:50]}...'")
+    if related_message:
+        logging.info(f"Related message role: {related_message.get('role')}")
+        logging.info(f"Related message preview: '{related_message.get('content', '')[:50]}...'")
     
-    # Generate timestamp
-    timestamp = datetime.now().isoformat()
-    
-    # Generate a unique chunk ID
-    chunk_id = f"{session_id}_{sequence}"
-    
-    # Prepare metadata
-    if metadata is None:
-        metadata = {}
-    
-    # Prepare data for insertion
-    data = [
-        # id field is auto-generated
-        [chunk_id],                              # chunk_id
-        [session_id],                           # session_id
-        [timestamp],                            # timestamp
-        [role],                                 # role
-        [content],                              # content
-        [sequence],                             # sequence
-        [metadata],                             # metadata
-        embedding.reshape(1, -1).tolist()       # embedding
-    ]
-    
+    # Get collection and prepare data for insertion
     try:
-        logging.info(f"Storing conversation message for session {session_id}, sequence {sequence}")
+        # Get collection
+        collection = get_conversation_collection()
+        
+        # Convert embedding to numpy array if not already
+        if not isinstance(embedding, np.ndarray):
+            embedding = np.array(embedding, dtype=np.float32)
+            
+        logging.info(f"Embedding shape: {embedding.shape}")
+        
+        # Generate timestamp
+        timestamp = datetime.now().isoformat()
+        
+        # Generate a unique chunk ID
+        chunk_id = f"{session_id}_{sequence}"
+        logging.info(f"Generated chunk_id: {chunk_id}")
+        
+        # Prepare metadata
+        if metadata is None:
+            metadata = {}
+            
+        # Add related message to metadata if provided
+        if related_message:
+            metadata["related_message"] = related_message
+        
+        # Prepare data for insertion
+        # Fields must match the order defined in create_conversation_collection_if_not_exists
+        data = [
+            # id field is auto-generated
+            [chunk_id],                              # chunk_id
+            [session_id],                           # session_id
+            [timestamp],                            # timestamp
+            [role],                                 # role
+            [content],                              # content
+            [sequence],                             # sequence
+            [metadata],                             # metadata
+            embedding.reshape(1, -1).tolist()       # embedding
+        ]
+        
+        # Log field counts for debugging
+        logging.info(f"Data field count: {len(data)}")
+        logging.info(f"Executing Milvus insert for conversation message")
         mr = collection.insert(data)
-        logging.debug(f"Insert result: {mr}")
+        logging.info(f"Insert result: {mr}")
+        
+        # Flush to make sure data is persisted
+        logging.info("Flushing collection to ensure data persistence")
         collection.flush()
+        
+        # Verify the insertion by trying to retrieve the entry
+        try:
+            # Make sure collection is loaded before query
+            try:
+                collection.load()
+                logging.info("Collection loaded for verification query")
+            except Exception as load_e:
+                logging.error(f"Warning: Could not load collection for verification: {str(load_e)}")
+                # Continue anyway as this is just verification
+            
+            expr = f'chunk_id == "{chunk_id}"'
+            verify_results = collection.query(expr=expr, output_fields=["session_id", "role"])
+            if verify_results:
+                logging.info(f"Successfully verified message insertion: {verify_results}")
+            else:
+                logging.warning(f"Could not verify message insertion for chunk_id={chunk_id}")
+        except Exception as verify_e:
+            logging.error(f"Error verifying message insertion: {str(verify_e)}")
+            logging.info("Continuing despite verification error - message was likely stored successfully")
+        
+        logging.info(f"=== CONVERSATION MESSAGE STORED SUCCESSFULLY ===\n")
         return True
     except Exception as e:
-        logging.error(f"Error storing conversation message: {str(e)}")
+        logging.error(f"Error storing conversation message: {str(e)}", exc_info=True)
         return False
 
 
 def search_conversations(query_embedding, limit=5):
     """Search for similar conversation messages based on vector similarity"""
-    collection = get_conversation_collection()
-    collection.load()
+    logging.info(f"Starting conversation search with limit={limit}")
     
-    search_params = {
-        "metric_type": "COSINE",
-        "params": {"ef": 32}
-    }
+    # Return empty results if there's an error
+    empty_results = []
     
-    results = collection.search(
-        data=[query_embedding],
-        anns_field="embedding",
-        param=search_params,
-        limit=limit,
-        output_fields=["chunk_id", "session_id", "timestamp", "role", "content", "sequence", "metadata"]
-    )
-    
-    return results
+    try:
+        # Connect to Milvus
+        try:
+            connections.connect(alias="default", host=MILVUS_HOST, port=MILVUS_PORT)
+            logging.info(f"Connected to Milvus for conversation search")
+        except Exception as conn_e:
+            logging.error(f"Failed to connect to Milvus: {str(conn_e)}")
+            return empty_results
+        
+        # Check if collection exists
+        if not utility.has_collection(CONVERSATION_COLLECTION):
+            logging.warning(f"Collection '{CONVERSATION_COLLECTION}' does not exist")
+            return empty_results
+            
+        # Get collection
+        try:
+            collection = Collection(CONVERSATION_COLLECTION)
+            logging.info(f"Successfully got conversation collection")
+        except Exception as coll_e:
+            logging.error(f"Failed to get conversation collection: {str(coll_e)}")
+            return empty_results
+        
+        # Load collection
+        try:
+            collection.load()
+            logging.info("Successfully loaded conversation collection")
+        except Exception as load_e:
+            logging.error(f"Error loading conversation collection: {str(load_e)}")
+            return empty_results
+        
+        # Configure search parameters
+        search_params = {
+            "metric_type": "COSINE",
+            "params": {"ef": 32}
+        }
+        
+        # Execute search with error handling
+        try:
+            logging.info(f"Executing Milvus search for conversations with limit={limit}")
+            results = collection.search(
+                data=[query_embedding],
+                anns_field="embedding",
+                param=search_params,
+                limit=limit,
+                output_fields=["chunk_id", "session_id", "timestamp", "role", "content", "sequence", "metadata"]
+            )
+            
+            # Log results summary
+            total_hits = sum(len(hits) for hits in results)
+            logging.info(f"Conversation search returned {total_hits} total hits across {len(results)} results")
+            
+            # Skip detailed logging to avoid Entity.get() errors
+            logging.debug(f"Found {sum(len(hits) for hits in results)} total hits across {len(results)} results")
+            
+            return results
+        except Exception as search_e:
+            logging.error(f"Error executing conversation search: {str(search_e)}")
+            return empty_results
+            
+    except Exception as e:
+        logging.error(f"Unexpected error in search_conversations: {str(e)}", exc_info=True)
+        return empty_results
 
 
 def get_conversation_history(session_id: str):
     """Get all messages for a specific conversation session"""
+    logging.info(f"Getting conversation history for session {session_id}")
     collection = get_conversation_collection()
     
-    # Query by session_id
-    expr = f'session_id == "{session_id}"'
-    results = collection.query(
-        expr=expr,
-        output_fields=["chunk_id", "session_id", "timestamp", "role", "content", "sequence", "metadata"],
-    )
+    # Make sure collection is loaded before query
+    try:
+        collection.load()
+        logging.info("Successfully loaded collection for conversation history retrieval")
+    except Exception as e:
+        logging.error(f"Error loading collection for conversation history: {str(e)}")
+        # Try to continue anyway
     
-    # Sort by sequence number
-    results.sort(key=lambda x: x['sequence'])
-    
-    return results
+    try:
+        # Query by session_id
+        expr = f'session_id == "{session_id}"'
+        results = collection.query(
+            expr=expr,
+            output_fields=["chunk_id", "session_id", "timestamp", "role", "content", "sequence", "metadata"],
+        )
+        
+        logging.info(f"Retrieved {len(results)} messages for session {session_id}")
+        
+        # Sort by sequence number
+        results.sort(key=lambda x: x['sequence'])
+        
+        # Log result details for debugging
+        for i, msg in enumerate(results):
+            logging.info(f"History message {i+1}: role={msg.get('role')}, sequence={msg.get('sequence')}, "
+                        f"content_preview='{msg.get('content', '')[:50]}...'")
+        
+        return results
+    except Exception as e:
+        logging.error(f"Error retrieving conversation history: {str(e)}", exc_info=True)
+        return []

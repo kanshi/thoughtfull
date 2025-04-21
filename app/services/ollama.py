@@ -212,27 +212,50 @@ class OllamaService:
         
         Args:
             query: User query
-            search_results: List of search results
+            search_results: List of search results (can include both document and conversation results)
             context: Optional conversation history
             stream: Whether to stream the response
             
         Returns:
             Dictionary containing response content or an iterator of response chunks if streaming
         """
-        # Create a context-enhanced prompt
-        context_text = "\n\n".join([
-            f"Document: {result['file_name']}\nContent: {result['content']}\nRelevance: {result['score']:.4f}"
-            for result in search_results
-        ])
+        # Separate document and conversation results
+        document_results = [result for result in search_results if result.get('type') == 'document']
+        conversation_results = [result for result in search_results if result.get('type') == 'conversation']
         
-        system_prompt = """You are an AI assistant that helps answer questions based on the provided document context.
-Base your answers primarily on the information in the documents provided.
-If the documents don't contain relevant information to answer the question, acknowledge this limitation.
-Always cite the source document name when providing information from it."""
+        # Create document context section
+        document_context = ""
+        if document_results:
+            document_context = "\n\n### RELEVANT DOCUMENTS:\n\n" + "\n\n".join([
+                f"Document: {result['file_name']}\nContent: {result['content']}\nRelevance: {result['score']:.4f}"
+                for result in document_results
+            ])
+        
+        # Create conversation context section
+        conversation_context = ""
+        if conversation_results:
+            conversation_context = "\n\n### RELEVANT PAST CONVERSATIONS:\n\n" + "\n\n".join([
+                f"From: {result['role']}\nContent: {result['content']}\nRelevance: {result['score']:.4f}"
+                for result in conversation_results
+            ])
+        
+        # Combine both contexts
+        context_text = document_context
+        if document_context and conversation_context:
+            context_text += "\n\n" + conversation_context
+        elif conversation_context:
+            context_text = conversation_context
+        
+        system_prompt = """You are an AI assistant that helps answer questions based on the provided context.
+Base your answers primarily on the information in the documents and past conversations provided.
+When citing information from documents, mention the document name.
+Avoid talking too much about your sources without a specific reference.
+If the provided context doesn't contain relevant information to answer the question, ignore that.
+When referencing past conversations, you can refer to them as 'my previous conversation' or 'my last conversation'."""
         
         enhanced_prompt = f"""I have a question: {query}
 
-Here are relevant document sections that might help answer the question:
+Here is relevant context that might help answer the question:
 
 {context_text}
 

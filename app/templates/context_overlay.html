@@ -127,6 +127,21 @@ window.showLastMessageContext = function() {
                 documents = [...documents, ...docResults];
             }
             
+            // Ensure all documents have a file_name
+            documents = documents.map(doc => {
+                if (!doc.file_name || doc.file_name === 'Document') {
+                    // Try to extract filename from other fields if available
+                    if (doc.metadata && doc.metadata.file_name) {
+                        doc.file_name = doc.metadata.file_name;
+                    } else if (doc.file_id) {
+                        doc.file_name = `Document ${doc.file_id}`;
+                    } else {
+                        doc.file_name = 'Unknown document';
+                    }
+                }
+                return doc;
+            });
+            
             // Display documents
             docsCount.textContent = documents.length;
             
@@ -146,6 +161,11 @@ window.showLastMessageContext = function() {
                     const docEl = document.createElement('div');
                     docEl.className = 'mb-4 p-3 bg-hacker-dark rounded border border-gray-700';
                     
+                    // Document title (using file name)
+                    const docTitle = document.createElement('h4');
+                    docTitle.className = 'text-neon-green text-sm font-semibold mb-2';
+                    docTitle.textContent = doc.file_name || 'Unknown document';
+                    
                     // Document content
                     const content = document.createElement('p');
                     content.className = 'text-gray-300 mb-2 whitespace-pre-wrap';
@@ -161,6 +181,7 @@ window.showLastMessageContext = function() {
                         citation.innerHTML += ` <span class="ml-2">(Relevance: <span class="text-neon-green">${score}%</span>)</span>`;
                     }
                     
+                    docEl.appendChild(docTitle);
                     docEl.appendChild(content);
                     docEl.appendChild(citation);
                     docsContainer.appendChild(docEl);
@@ -180,6 +201,13 @@ window.showLastMessageContext = function() {
                 );
                 conversations = [...conversations, ...convResults];
             }
+            
+            // Sort conversations by timestamp (newest first)
+            conversations.sort((a, b) => {
+                const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                return timeB - timeA; // descending order (newest first)
+            });
             
             // Display conversations
             convsCount.textContent = conversations.length;

@@ -220,28 +220,6 @@ async def process_chat_message(
         active_messages[session_id] = message
         logger.info(f"Set active message for session {session_id}: '{message[:50]}...'")
         
-        # Start a task to store the user message in Milvus
-        async def store_user_message_async():
-            try:
-                embedding_service = EmbeddingService()
-                user_embedding = embedding_service.get_embedding(message)
-                
-                # Store user message with sequence number based on context length
-                sequence = len(context) - 1  # 0-indexed
-                store_conversation_message(
-                    session_id=session_id,
-                    role="user",
-                    content=message,
-                    embedding=user_embedding,
-                    sequence=sequence,
-                    metadata={"model": DEFAULT_LLM_MODEL}
-                )
-            except Exception as e:
-                logger.error(f"Error storing user message in background: {str(e)}", exc_info=e)
-        
-        # Start the storage task without awaiting it
-        asyncio.create_task(store_user_message_async())
-        
         return JSONResponse(
             status_code=200,
             content={
@@ -306,6 +284,19 @@ async def chat_message(
                 embedding_service = EmbeddingService()
                 user_embedding = embedding_service.get_embedding(message)
                 
+                # Get the previous assistant message if it exists
+                previous_assistant_message = None
+                if len(context) > 1:  # At least one previous exchange has occurred
+                    # Look for the last assistant message before this user message
+                    for msg in reversed(context[:-1]):
+                        if msg.get("role") == "assistant":
+                            previous_assistant_message = {
+                                "role": "assistant",
+                                "content": msg.get("content", ""),
+                                "sequence": context.index(msg)
+                            }
+                            break
+                
                 # Store user message with sequence number based on context length
                 sequence = len(context) - 1  # 0-indexed
                 store_conversation_message(
@@ -314,7 +305,8 @@ async def chat_message(
                     content=message,
                     embedding=user_embedding,
                     sequence=sequence,
-                    metadata={"model": DEFAULT_LLM_MODEL}
+                    metadata={"model": DEFAULT_LLM_MODEL},
+                    related_message=previous_assistant_message
                 )
             except Exception as e:
                 logger.error(f"Error storing user message in background: {str(e)}", exc_info=e)
